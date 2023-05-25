@@ -1,0 +1,11 @@
+{
+	"type": "code",
+	"modid": "powerofmindcore",
+	"name": "Power of Mind: Core",
+	"authors": [ "Xytabich" ],
+	"description": "Core-mod for Power of Mind",
+	"version": "1.0.0",
+	"dependencies": {
+		"game": "1.18.0-pre"
+	}
+}
