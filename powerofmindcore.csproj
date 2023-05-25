@@ -76,22 +76,16 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="assets\" />
+    <Folder Include="Systems\Render\" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="PowerOfMindCore.cs" />
-    <Compile Include="Systems\Multiblock\EnumAlignment.cs" />
-    <Compile Include="Systems\Multiblock\EnumAllowedTransformation.cs" />
-    <Compile Include="Systems\Multiblock\MultiblockRegistry.cs" />
-    <Compile Include="Systems\Multiblock\MultiblockStructure.Types.cs" />
-    <Compile Include="Systems\Multiblock\MultiblockSystem.cs" />
-    <Compile Include="Systems\Multiblock\MultiblockStructure.cs" />
-    <Compile Include="Systems\Multiblock\StructureIngredient.cs" />
-    <Compile Include="Systems\Multiblock\StructureMaterial.cs" />
-    <Compile Include="Utils\Quaternion.cs" />
-    <Compile Include="Utils\Vector3.cs" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="Systems\Multiblock\MultiblockStructure.FromJson.cs" />
+    <Compile Include="Systems\Multiblock\BlockMultiblockMain.cs" />
+    <Compile Include="Systems\Multiblock\BlockMultiblockSurrogate.cs" />
+    <Compile Include="Systems\Multiblock\IMultiblockMainBlock.cs" />
+    <Compile Include="Systems\Multiblock\IMultiblockPartBlock.cs" />
+    <Compile Include="Systems\Multiblock\IMultiblockPhantomBlock.cs" />
+    <Compile Include="Systems\Multiblock\MultiblockManager.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
