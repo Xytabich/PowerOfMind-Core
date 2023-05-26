@@ -44,15 +44,14 @@ namespace PowerOfMind.Graphics.Shader
 			//TODO: so main can be also generic, so need to add ShaderType.Generic to enum, and return as single block with ShaderType.Generic type
 		}
 
-		private static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> outRanges, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
+		private static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> skipRanges, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
 		{
 			//TODO: same as ExtractBlockAndRemoveComments but also should handle includes, aliases & etc. by the way, aliases should look like:
 			//[POSITION]//doesn't matter on new line or same line
 			//layout(location = 2) in vec3 pos;
 
 			ProcessBlockTokens(tokens, start,
-				s => ShaderParserHelpers.SkipVertexLayout(source, tokens, s),
-				s => ShaderParserHelpers.SkipBlock(tokens, s),
+				s => ShaderParserHelpers.ProcessBlock(tokens, s),
 				s => ShaderParserHelpers.CollectUniform(source, tokens, s, outUniforms),
 				s => ShaderParserHelpers.CollectInput(source, tokens, s, outInputs)
 			);
@@ -76,7 +75,7 @@ namespace PowerOfMind.Graphics.Shader
 				}
 				if(skip)
 				{
-					start = new TokenSourceRef(start.index + 1, 0, start.sourceOffset + (tokens[start.index].size - start.offset));
+					start = start.Increment(tokens);
 				}
 			}
 
@@ -131,12 +130,36 @@ namespace PowerOfMind.Graphics.Shader
 						currentType = TokenType.Asterisk;
 						currentSize = 1;
 						break;
+					case ';':
+						currentType = TokenType.Semicolon;
+						currentSize = 1;
+						break;
+					case '=':
+						currentType = TokenType.Equal;
+						currentSize = 1;
+						break;
 					case '{':
 						currentType = TokenType.BlockOpen;
 						currentSize = 1;
 						break;
 					case '}':
 						currentType = TokenType.BlockClose;
+						currentSize = 1;
+						break;
+					case '[':
+						currentType = TokenType.BracketOpen;
+						currentSize = 1;
+						break;
+					case ']':
+						currentType = TokenType.BracketClose;
+						currentSize = 1;
+						break;
+					case '(':
+						currentType = TokenType.ParenthesesOpen;
+						currentSize = 1;
+						break;
+					case ')':
+						currentType = TokenType.ParenthesesClose;
 						currentSize = 1;
 						break;
 					default:
@@ -235,6 +258,29 @@ namespace PowerOfMind.Graphics.Shader
 				this.offset = offset;
 				this.sourceOffset = sourceOffset;
 			}
+
+			public TokenSourceRef Increment(List<Token> tokens)
+			{
+				if(offset + 1 < tokens[index].size)
+				{
+					return new TokenSourceRef(index, offset + 1, sourceOffset + 1);
+				}
+				return new TokenSourceRef(index + 1, 0, sourceOffset + 1);
+			}
+
+			public TokenSourceRef AddOffset(List<Token> tokens, int count)
+			{
+				if(tokens[index].size == offset + count)
+				{
+					return Step(tokens);
+				}
+				return new TokenSourceRef(index, offset + count, sourceOffset + count);
+			}
+
+			public TokenSourceRef Step(List<Token> tokens)
+			{
+				return new TokenSourceRef(index + 1, 0, sourceOffset + tokens[index].size - offset);
+			}
 		}
 
 		[StructLayout(LayoutKind.Auto, Pack = 4)]
@@ -242,13 +288,13 @@ namespace PowerOfMind.Graphics.Shader
 		{
 			public readonly TokenRef start;
 			public readonly TokenRef end;
-			public readonly int sourceOffset;
+			public readonly int length;
 
-			public TokenRange(TokenRef start, TokenRef end, int sourceOffset)
+			public TokenRange(TokenRef start, TokenRef end, int length)
 			{
 				this.start = start;
 				this.end = end;
-				this.sourceOffset = sourceOffset;
+				this.length = length;
 			}
 		}
 
@@ -265,14 +311,29 @@ namespace PowerOfMind.Graphics.Shader
 			Slash,
 			BlockOpen,
 			BlockClose,
-			Hash
+			BracketOpen,
+			BracketClose,
+			ParenthesesOpen,
+			ParenthesesClose,
+			Hash,
+			Equal,
+			Semicolon
 		}
 
 		private struct FieldInfo
 		{
+			public int location;
 			public string name;
 			public string alias;
 			public string typeName;
+
+			public FieldInfo(int location, string name, string alias, string typeName)
+			{
+				this.location = location;
+				this.name = name;
+				this.alias = alias;
+				this.typeName = typeName;
+			}
 		}
 
 		private delegate TokenSourceRef? TryProcessTokensDelegate(TokenSourceRef start);
