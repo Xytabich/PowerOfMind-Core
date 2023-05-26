@@ -36,6 +36,9 @@
     <Reference Include="0Harmony">
       <HintPath>..\..\..\Games\Vintagestory18\Lib\0Harmony.dll</HintPath>
     </Reference>
+    <Reference Include="OpenTK">
+      <HintPath>..\..\..\Games\Vintagestory18\Lib\OpenTK.dll</HintPath>
+    </Reference>
     <Reference Include="protobuf-net">
       <HintPath>..\..\..\Games\Vintagestory18\Lib\protobuf-net.dll</HintPath>
     </Reference>
@@ -76,16 +79,26 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="assets\" />
-    <Folder Include="Systems\Render\" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="PowerOfMindCore.cs" />
+    <Compile Include="Systems\Graphics\IVertexStruct.cs" />
+    <Compile Include="Systems\Graphics\MeshData.cs" />
+    <Compile Include="Systems\Graphics\RenderExtensions.cs" />
+    <Compile Include="Systems\Graphics\Shader\ShaderParser.cs" />
+    <Compile Include="Systems\Graphics\Shader\ShaderParserHelpers.cs" />
+    <Compile Include="Systems\Graphics\VertexDeclarationUtil.cs" />
     <Compile Include="Systems\Multiblock\BlockMultiblockMain.cs" />
     <Compile Include="Systems\Multiblock\BlockMultiblockSurrogate.cs" />
     <Compile Include="Systems\Multiblock\IMultiblockMainBlock.cs" />
     <Compile Include="Systems\Multiblock\IMultiblockPartBlock.cs" />
     <Compile Include="Systems\Multiblock\IMultiblockPhantomBlock.cs" />
     <Compile Include="Systems\Multiblock\MultiblockManager.cs" />
+    <Compile Include="Systems\Graphics\EnumVertexComponentType.cs" />
+    <Compile Include="Systems\Graphics\VertexAttribute.cs" />
+    <Compile Include="Systems\Graphics\VertexAttributeAlias.cs" />
+    <Compile Include="Systems\Graphics\VertexComponentAttribute.cs" />
+    <Compile Include="Systems\Graphics\VertexDeclaration.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
