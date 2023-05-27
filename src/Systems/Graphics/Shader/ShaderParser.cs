@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace PowerOfMind.Graphics.Shader
@@ -9,14 +8,7 @@ namespace PowerOfMind.Graphics.Shader
 		/// <summary>
 		/// Provides source code for the given source id.
 		/// </summary>
-		/// <param name="sourceContent">Shader source code</param>
-		/// <param name="isGenericSource">
-		/// Must be set to true if the source is generic, i.e. it will not be split into shader blocks.
-		/// Otherwise, the source will be divided and used block by block.
-		/// I.e. if the include was in a vertex block, then the code from the source vertex block will be taken.
-		/// If the include was in the global environment, then the code will be copied block by block.
-		/// </param>
-		public delegate void SourceCodeProvider(int sourceId, out string sourceContent, out bool isGenericSource);
+		public delegate string SourceCodeProvider(int sourceId);
 
 		/// <summary>
 		/// Provides the unique id of the source, must be the same if requested multiple times for the same source.
@@ -41,23 +33,38 @@ namespace PowerOfMind.Graphics.Shader
 		/// </param>
 		public static void ParseShader(SourceCodeProvider provideSourceCode, SourceIdProvider provideSourceId)
 		{
-			//TODO: so main can be also generic, so need to add ShaderType.Generic to enum, and return as single block with ShaderType.Generic type
+			var mainCode = provideSourceCode(0);
+			var mainBlock = TokenizeSource(mainCode);
+			var skipRanges = new List<TokenRange>();
+			var includes = new List<TokenRange>();
+			var outInputs = new List<FieldInfo>();
+			var outUniforms = new List<FieldInfo>();
+			ProcessShaderBlockAndRemoveComments(mainCode, mainBlock, new TokenSourceRef(0, 0, 0), skipRanges, includes, outInputs, outUniforms);
 		}
 
-		private static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> skipRanges, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
+		internal static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> skipRanges, List<TokenRange> includes, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
 		{
 			//TODO: same as ExtractBlockAndRemoveComments but also should handle includes, aliases & etc. by the way, aliases should look like:
 			//[POSITION]//doesn't matter on new line or same line
 			//layout(location = 2) in vec3 pos;
 
-			ProcessBlockTokens(tokens, start,
-				s => ShaderParserHelpers.ProcessBlock(tokens, s),
-				s => ShaderParserHelpers.CollectUniform(source, tokens, s, outUniforms),
-				s => ShaderParserHelpers.CollectInput(source, tokens, s, outInputs)
+			var skipComments = new TryProcessTokensDelegate[] {
+				s=>ShaderParserHelpers.SkipCommentBlock(tokens, s, skipRanges),
+				s=>ShaderParserHelpers.SkipCommentLine(tokens, s, skipRanges)
+			};
+
+			ProcessBlockTokens(tokens, start,//TODO: skip comments
+				s => ShaderParserHelpers.ProcessMethod(tokens, s, skipComments),
+				s => ShaderParserHelpers.ProcessBlock(tokens, s, skipComments),
+				s => ShaderParserHelpers.CollectUniform(source, tokens, s, outUniforms, skipComments),
+				s => ShaderParserHelpers.CollectInput(source, tokens, s, outInputs, skipComments),
+				s => ShaderParserHelpers.CollectInclude(source, tokens, s, includes),
+				s => ShaderParserHelpers.SkipCommentBlock(tokens, s, skipRanges),
+				s => ShaderParserHelpers.SkipCommentLine(tokens, s, skipRanges)
 			);
 		}
 
-		private static TokenSourceRef ProcessBlockTokens(List<Token> tokens, TokenSourceRef start, params TryProcessTokensDelegate[] processors)
+		internal static TokenSourceRef ProcessBlockTokens(List<Token> tokens, TokenSourceRef start, params TryProcessTokensDelegate[] processors)
 		{
 			while(start.index < tokens.Count)
 			{
@@ -82,7 +89,7 @@ namespace PowerOfMind.Graphics.Shader
 			return start;
 		}
 
-		private static List<Token> TokenizeSource(string source)
+		internal static List<Token> TokenizeSource(string source)
 		{
 			int len = source.Length;
 			var tokens = new List<Token>();
@@ -192,7 +199,7 @@ namespace PowerOfMind.Graphics.Shader
 						tokens.Add(new Token(tokenType, tokenSize));
 					}
 					tokenType = currentType;
-					currentSize = 0;
+					tokenSize = 0;
 				}
 				tokenSize += currentSize;
 				index += currentSize;
@@ -206,7 +213,7 @@ namespace PowerOfMind.Graphics.Shader
 		}
 
 		[StructLayout(LayoutKind.Auto, Pack = 4)]
-		private readonly struct Token
+		internal readonly struct Token
 		{
 			public readonly TokenType type;
 			public readonly int size;
@@ -219,7 +226,7 @@ namespace PowerOfMind.Graphics.Shader
 		}
 
 		[StructLayout(LayoutKind.Auto, Pack = 4)]
-		private readonly struct TokenRef
+		internal readonly struct TokenRef
 		{
 			/// <summary>
 			/// Index in tokens list
@@ -239,7 +246,7 @@ namespace PowerOfMind.Graphics.Shader
 		}
 
 		[StructLayout(LayoutKind.Auto, Pack = 4)]
-		private readonly struct TokenSourceRef
+		internal readonly struct TokenSourceRef
 		{
 			/// <summary>
 			/// Index in tokens list
@@ -284,7 +291,7 @@ namespace PowerOfMind.Graphics.Shader
 		}
 
 		[StructLayout(LayoutKind.Auto, Pack = 4)]
-		private readonly struct TokenRange
+		internal readonly struct TokenRange
 		{
 			public readonly TokenRef start;
 			public readonly TokenRef end;
@@ -298,7 +305,7 @@ namespace PowerOfMind.Graphics.Shader
 			}
 		}
 
-		private enum TokenType
+		internal enum TokenType
 		{
 			Text,
 			Letter,
@@ -320,7 +327,7 @@ namespace PowerOfMind.Graphics.Shader
 			Semicolon
 		}
 
-		private struct FieldInfo
+		internal struct FieldInfo
 		{
 			public int location;
 			public string name;
@@ -336,7 +343,7 @@ namespace PowerOfMind.Graphics.Shader
 			}
 		}
 
-		private delegate TokenSourceRef? TryProcessTokensDelegate(TokenSourceRef start);
+		internal delegate TokenSourceRef? TryProcessTokensDelegate(TokenSourceRef start);
 
 		public enum ParseFlags
 		{

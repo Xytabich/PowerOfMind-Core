@@ -81,24 +81,25 @@
     <Folder Include="assets\" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="PowerOfMindCore.cs" />
-    <Compile Include="Systems\Graphics\IVertexStruct.cs" />
-    <Compile Include="Systems\Graphics\MeshData.cs" />
-    <Compile Include="Systems\Graphics\RenderExtensions.cs" />
-    <Compile Include="Systems\Graphics\Shader\ShaderParser.cs" />
-    <Compile Include="Systems\Graphics\Shader\ShaderParserHelpers.cs" />
-    <Compile Include="Systems\Graphics\VertexDeclarationUtil.cs" />
-    <Compile Include="Systems\Multiblock\BlockMultiblockMain.cs" />
-    <Compile Include="Systems\Multiblock\BlockMultiblockSurrogate.cs" />
-    <Compile Include="Systems\Multiblock\IMultiblockMainBlock.cs" />
-    <Compile Include="Systems\Multiblock\IMultiblockPartBlock.cs" />
-    <Compile Include="Systems\Multiblock\IMultiblockPhantomBlock.cs" />
-    <Compile Include="Systems\Multiblock\MultiblockManager.cs" />
-    <Compile Include="Systems\Graphics\EnumVertexComponentType.cs" />
-    <Compile Include="Systems\Graphics\VertexAttribute.cs" />
-    <Compile Include="Systems\Graphics\VertexAttributeAlias.cs" />
-    <Compile Include="Systems\Graphics\VertexComponentAttribute.cs" />
-    <Compile Include="Systems\Graphics\VertexDeclaration.cs" />
+    <Compile Include="src\AssemblyInfo.cs" />
+    <Compile Include="src\PowerOfMindCore.cs" />
+    <Compile Include="src\Systems\Graphics\IVertexStruct.cs" />
+    <Compile Include="src\Systems\Graphics\MeshData.cs" />
+    <Compile Include="src\Systems\Graphics\RenderExtensions.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderParser.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderParserHelpers.cs" />
+    <Compile Include="src\Systems\Graphics\VertexDeclarationUtil.cs" />
+    <Compile Include="src\Systems\Multiblock\BlockMultiblockMain.cs" />
+    <Compile Include="src\Systems\Multiblock\BlockMultiblockSurrogate.cs" />
+    <Compile Include="src\Systems\Multiblock\IMultiblockMainBlock.cs" />
+    <Compile Include="src\Systems\Multiblock\IMultiblockPartBlock.cs" />
+    <Compile Include="src\Systems\Multiblock\IMultiblockPhantomBlock.cs" />
+    <Compile Include="src\Systems\Multiblock\MultiblockManager.cs" />
+    <Compile Include="src\Systems\Graphics\EnumVertexComponentType.cs" />
+    <Compile Include="src\Systems\Graphics\VertexAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\VertexAttributeAlias.cs" />
+    <Compile Include="src\Systems\Graphics\VertexComponentAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\VertexDeclaration.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

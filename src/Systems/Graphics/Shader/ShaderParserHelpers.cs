@@ -7,6 +7,38 @@ namespace PowerOfMind.Graphics.Shader
 	{
 		private static class ShaderParserHelpers
 		{
+			public static TokenSourceRef? CollectInclude(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> outList)
+			{
+				var token = tokens[start.index];
+				if(token.type == TokenType.Hash && token.size - start.offset == 1)
+				{
+					var from = start;
+					start = start.Step(tokens);
+					if(IsLetter(source, tokens, start, "include"))
+					{
+						start = start.Step(tokens);
+						if(tokens[start.index].type != TokenType.Whitespace)
+						{
+							return null;
+						}
+						start = start.Step(tokens);
+
+						while(start.index < tokens.Count)
+						{
+							if(tokens[start.index].type == TokenType.LineBreak)
+							{
+								outList.Add(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset));
+								return start.Step(tokens);
+							}
+						}
+
+						outList.Add(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset));
+						return start;
+					}
+				}
+				return null;
+			}
+
 			public static TokenSourceRef? CollectUniform(string source, List<Token> tokens, TokenSourceRef start, List<FieldInfo> outList, params TryProcessTokensDelegate[] subProcessors)
 			{
 				//[MVP_MATRIX]
@@ -14,14 +46,9 @@ namespace PowerOfMind.Graphics.Shader
 
 				var position = start;
 				bool hasAlias = TryTakeAlias(source, tokens, ref position, out var alias);
-				if(hasAlias)
-				{
-					position = start;
-				}
+				if(!hasAlias) position = start;
 
-				ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "uniform"), subProcessors);
-
-				if(IsLetter(source, tokens, position, "uniform"))
+				if(ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "uniform"), subProcessors))
 				{
 					position = position.Step(tokens);
 					if(ProcessIntervalUntil(tokens, ref position, p => IsIdentifierStart(tokens[p.index]), subProcessors))
@@ -51,41 +78,41 @@ namespace PowerOfMind.Graphics.Shader
 
 				var position = start;
 				bool hasAlias = TryTakeAlias(source, tokens, ref position, out var alias);
-				if(hasAlias)
+				if(!hasAlias) position = start;
+
+				if(ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "layout") || IsLetter(source, tokens, p, "in"), subProcessors))
 				{
-					position = start;
-				}
-
-				ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "layout") || IsLetter(source, tokens, p, "in"), subProcessors);
-
-				int location = -1;
-				if(IsLetter(source, tokens, position, "layout"))
-				{
-					position = position.Step(tokens);
-					ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.ParenthesesOpen, subProcessors);
-
-					if(tokens[position.index].type == TokenType.ParenthesesOpen && tokens[position.index].size - position.offset == 1)
+					int location = -1;
+					if(IsLetter(source, tokens, position, "layout"))
 					{
-						ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "location"), subProcessors);
-
-						if(IsLetter(source, tokens, position, "location"))
+						position = position.Step(tokens);
+						if(ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.ParenthesesOpen, subProcessors))
 						{
-							position = position.Step(tokens);
-							ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Equal, subProcessors);
-
-							if(tokens[position.index].type == TokenType.Equal && tokens[position.index].size - position.offset == 1)
+							if(tokens[position.index].size - position.offset == 1)
 							{
-								ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Number, subProcessors);
-
-								if(tokens[position.index].type == TokenType.Number)
+								position = position.Step(tokens);
+								if(ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "location"), subProcessors))
 								{
-									location = int.Parse(source.Substring(position.sourceOffset, tokens[position.index].size - position.offset));
 									position = position.Step(tokens);
-
-									ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.ParenthesesClose, subProcessors);
-									if(tokens[position.index].type == TokenType.ParenthesesClose)
+									if(ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Equal, subProcessors))
 									{
-										position = position.Increment(tokens);
+										if(tokens[position.index].size - position.offset == 1)
+										{
+											position = position.Step(tokens);
+											if(ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Number, subProcessors))
+											{
+												location = int.Parse(source.Substring(position.sourceOffset, tokens[position.index].size - position.offset));
+												position = position.Step(tokens);
+
+												if(ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.ParenthesesClose, subProcessors))
+												{
+													position = position.Increment(tokens);
+												}
+												else return null;
+											}
+											else return null;
+										}
+										else return null;
 									}
 									else return null;
 								}
@@ -94,28 +121,26 @@ namespace PowerOfMind.Graphics.Shader
 							else return null;
 						}
 						else return null;
+
+						ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "in"), subProcessors);
 					}
-					else return null;
 
-					ProcessBreakUntil(tokens, ref position, p => IsLetter(source, tokens, p, "in"), subProcessors);
-				}
-
-				if(IsLetter(source, tokens, position, "in"))
-				{
-					position = position.Step(tokens);
-					if(ProcessIntervalUntil(tokens, ref position, p => IsIdentifierStart(tokens[p.index]), subProcessors))
+					if(IsLetter(source, tokens, position, "in"))
 					{
-						if(TryExtractIdentifier(source, tokens, ref position, out var typeName))
+						position = position.Step(tokens);
+						if(ProcessIntervalUntil(tokens, ref position, p => IsIdentifierStart(tokens[p.index]), subProcessors))
 						{
-							if(ProcessIntervalUntil(tokens, ref position, p => IsIdentifierStart(tokens[p.index]), subProcessors))
+							if(TryExtractIdentifier(source, tokens, ref position, out var typeName))
 							{
-								if(TryExtractIdentifier(source, tokens, ref position, out var fieldName))
+								if(ProcessIntervalUntil(tokens, ref position, p => IsIdentifierStart(tokens[p.index]), subProcessors))
 								{
-									ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Semicolon, subProcessors);
-									if(tokens[position.index].type == TokenType.Semicolon)
+									if(TryExtractIdentifier(source, tokens, ref position, out var fieldName))
 									{
-										outList.Add(new FieldInfo(location, fieldName, hasAlias ? alias : null, typeName));
-										return position.Increment(tokens);
+										if(ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Semicolon, subProcessors))
+										{
+											outList.Add(new FieldInfo(location, fieldName, hasAlias ? alias : null, typeName));
+											return position.Increment(tokens);
+										}
 									}
 								}
 							}
@@ -123,6 +148,48 @@ namespace PowerOfMind.Graphics.Shader
 					}
 				}
 
+				return null;
+			}
+
+			public static TokenSourceRef? ProcessMethod(List<Token> tokens, TokenSourceRef start, params TryProcessTokensDelegate[] subProcessors)
+			{
+				if(TrySkipIdentifier(tokens, ref start))
+				{
+					if(ProcessIntervalUntil(tokens, ref start, p => IsIdentifierStart(tokens[p.index]), subProcessors))
+					{
+						if(TrySkipIdentifier(tokens, ref start))
+						{
+							if(ProcessBreakUntil(tokens, ref start, p => tokens[p.index].type == TokenType.ParenthesesOpen, subProcessors))
+							{
+								if(tokens[start.index].size == 1)
+								{
+									start = start.Step(tokens);
+									if(ProcessUntil(tokens, ref start, p => tokens[p.index].type == TokenType.ParenthesesClose, subProcessors))
+									{
+										if(tokens[start.index].size - start.offset > 1)
+										{
+											return null;
+										}
+										start = start.Step(tokens);
+
+										if(ProcessBreakUntil(tokens, ref start, p => tokens[p.index].type == TokenType.BlockOpen, subProcessors))
+										{
+											start = start.Increment(tokens);
+											if(ProcessUntil(tokens, ref start, p => tokens[p.index].type == TokenType.BlockClose, subProcessors))
+											{
+												if(tokens[start.index].size - start.offset > 1)
+												{
+													return null;
+												}
+												return start.Step(tokens);
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
 				return null;
 			}
 
@@ -418,6 +485,27 @@ namespace PowerOfMind.Graphics.Shader
 				return false;
 			}
 
+			private static bool TrySkipIdentifier(List<Token> tokens, ref TokenSourceRef position)
+			{
+				if(IsIdentifierStart(tokens[position.index]))
+				{
+					while(position.index < tokens.Count)
+					{
+						switch(tokens[position.index].type)
+						{
+							case TokenType.Letter:
+							case TokenType.Underscore:
+							case TokenType.Number:
+								break;
+							default: return true;
+						}
+						position = position.Step(tokens);
+					}
+					return true;
+				}
+				return false;
+			}
+
 			private static bool IsLetter(string source, List<Token> tokens, in TokenSourceRef position, string letter)
 			{
 				if(tokens[position.index].type == TokenType.Letter)
@@ -471,13 +559,13 @@ namespace PowerOfMind.Graphics.Shader
 			/// Skips whitespaces & line breaks & runs subprocessors.
 			/// But returns immediately if the predicate returns true, without additional loop passes.
 			/// </summary>
-			private static void ProcessBreakUntil(List<Token> tokens, ref TokenSourceRef position, Predicate<TokenSourceRef> predicate, params TryProcessTokensDelegate[] subProcessors)
+			private static bool ProcessBreakUntil(List<Token> tokens, ref TokenSourceRef position, Predicate<TokenSourceRef> predicate, params TryProcessTokensDelegate[] subProcessors)
 			{
 				while(position.index < tokens.Count)
 				{
 					if(predicate(position))
 					{
-						break;
+						return true;
 					}
 
 					bool skip = true;
@@ -500,6 +588,35 @@ namespace PowerOfMind.Graphics.Shader
 						else break;
 					}
 				}
+				return false;
+			}
+
+			private static bool ProcessUntil(List<Token> tokens, ref TokenSourceRef position, Predicate<TokenSourceRef> predicate, params TryProcessTokensDelegate[] subProcessors)
+			{
+				while(position.index < tokens.Count)
+				{
+					if(predicate(position))
+					{
+						return true;
+					}
+
+					bool skip = true;
+					foreach(var proc in subProcessors)
+					{
+						var result = proc(position);
+						if(result.HasValue)
+						{
+							skip = false;
+							position = result.Value;
+							break;
+						}
+					}
+					if(skip)
+					{
+						position = position.Step(tokens);
+					}
+				}
+				return false;
 			}
 
 			private static bool IsIdentifierStart(Token token)
