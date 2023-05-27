@@ -32,12 +32,9 @@ namespace PowerOfMind.Graphics.Shader
 							{
 								if(TryExtractIdentifier(source, tokens, ref position, out var fieldName))
 								{
-									ProcessBreakUntil(tokens, ref position, p => tokens[p.index].type == TokenType.Semicolon, subProcessors);
-									if(tokens[position.index].type == TokenType.Semicolon)
-									{
-										outList.Add(new FieldInfo(-1, fieldName, hasAlias ? alias : null, typeName));
-										return position.Increment(tokens);
-									}
+									//There is no need to check for a semicolon as it could be an array, etc.
+									outList.Add(new FieldInfo(-1, fieldName, hasAlias ? alias : null, typeName));
+									return position.Increment(tokens);
 								}
 							}
 						}
