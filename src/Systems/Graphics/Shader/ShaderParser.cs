@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Runtime.InteropServices;
+using System.Text;
 
 namespace PowerOfMind.Graphics.Shader
 {
@@ -33,13 +34,91 @@ namespace PowerOfMind.Graphics.Shader
 		/// </param>
 		public static void ParseShader(SourceCodeProvider provideSourceCode, SourceIdProvider provideSourceId)
 		{
-			var mainCode = provideSourceCode(0);
-			var mainBlock = TokenizeSource(mainCode);
+			var sb = new StringBuilder();
+			var includedSources = new HashSet<int>();
+
+			BuildShader(sb, 0, provideSourceCode, provideSourceId, includedSources);
+		}
+
+		private static void BuildShader(StringBuilder sb, int sourceId, SourceCodeProvider provideSourceCode, SourceIdProvider provideSourceId, HashSet<int> includedSources)
+		{
+			if(!includedSources.Add(sourceId)) return;
+
+			var code = provideSourceCode(0);
+			var tokens = TokenizeSource(code);
 			var skipRanges = new List<TokenRange>();
 			var includes = new List<TokenRange>();
 			var outInputs = new List<FieldInfo>();
 			var outUniforms = new List<FieldInfo>();
-			ProcessShaderBlockAndRemoveComments(mainCode, mainBlock, new TokenSourceRef(0, 0, 0), skipRanges, includes, outInputs, outUniforms);
+			ProcessShaderBlockAndRemoveComments(code, tokens, new TokenSourceRef(0, 0, 0), skipRanges, includes, outInputs, outUniforms);
+
+			int skipIndex = 0;
+			int nextSkipToken = skipRanges.Count > 0 ? skipRanges[0].start.index : -1;
+			int includeIndex = 0;
+			int nextIncludeToken = includes.Count > 0 ? includes[0].start.index : -1;
+			int prevSourceOffset = 0;
+			int sourceOffset = 0;
+			for(int i = 0; i < tokens.Count; i++)
+			{
+				if(nextSkipToken == i)
+				{
+					var range = skipRanges[skipIndex];
+					if(range.start.offset != 0)
+					{
+						sourceOffset += range.start.offset;
+					}
+					if(prevSourceOffset != sourceOffset)
+					{
+						sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
+					}
+					sb.Append(' ');//For safety, if the block is between words
+
+					sourceOffset += range.length;
+					prevSourceOffset = sourceOffset;
+					if(range.end.offset != 0)
+					{
+						prevSourceOffset -= tokens[range.end.index].size - range.end.offset;
+					}
+
+					skipIndex++;
+					nextSkipToken = skipRanges.Count > skipIndex ? skipRanges[skipIndex].start.index : -1;
+
+					i += range.end.index - range.start.index;
+					continue;
+				}
+				if(nextIncludeToken == i)
+				{
+					var range = includes[includeIndex];
+					if(range.start.offset != 0)
+					{
+						sourceOffset += range.start.offset;
+					}
+					if(prevSourceOffset != sourceOffset)
+					{
+						sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
+					}
+
+					//TODO: include
+
+					sourceOffset += range.length;
+					prevSourceOffset = sourceOffset;
+					if(range.end.offset != 0)
+					{
+						prevSourceOffset -= tokens[range.end.index].size - range.end.offset;
+					}
+
+					includeIndex++;
+					nextIncludeToken = includes.Count > includeIndex ? includes[includeIndex].start.index : -1;
+
+					i += range.end.index - range.start.index;
+					continue;
+				}
+				sourceOffset += tokens[i].size;
+			}
+			if(prevSourceOffset != sourceOffset)
+			{
+				sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
+			}
 		}
 
 		internal static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> skipRanges, List<TokenRange> includes, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)

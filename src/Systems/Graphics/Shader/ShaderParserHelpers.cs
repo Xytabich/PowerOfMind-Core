@@ -30,6 +30,7 @@ namespace PowerOfMind.Graphics.Shader
 								outList.Add(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset));
 								return start.Step(tokens);
 							}
+							start = start.Step(tokens);
 						}
 
 						outList.Add(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset));
