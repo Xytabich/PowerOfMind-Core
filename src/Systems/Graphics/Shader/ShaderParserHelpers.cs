@@ -7,7 +7,7 @@ namespace PowerOfMind.Graphics.Shader
 	{
 		private static class ShaderParserHelpers
 		{
-			public static TokenSourceRef? CollectInclude(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> outList)
+			public static TokenSourceRef? CollectInclude(string source, List<Token> tokens, TokenSourceRef start, List<KeyValuePair<TokenRange, string>> outList, params TryProcessTokensDelegate[] subProcessors)
 			{
 				var token = tokens[start.index];
 				if(token.type == TokenType.Hash && token.size - start.offset == 1)
@@ -17,24 +17,20 @@ namespace PowerOfMind.Graphics.Shader
 					if(IsLetter(source, tokens, start, "include"))
 					{
 						start = start.Step(tokens);
-						if(tokens[start.index].type != TokenType.Whitespace)
+						if(ProcessIntervalUntil(tokens, ref start, p => tokens[p.index].type == TokenType.Quotes, subProcessors))
 						{
-							return null;
-						}
-						start = start.Step(tokens);
-
-						while(start.index < tokens.Count)
-						{
-							if(tokens[start.index].type == TokenType.LineBreak)
+							start = start.Increment(tokens);
+							int startOffset = start.sourceOffset;
+							if(ProcessUntil(tokens, ref start, p => (tokens[p.index].type == TokenType.Quotes || tokens[p.index].type == TokenType.LineBreak), subProcessors))
 							{
-								outList.Add(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset));
-								return start.Step(tokens);
+								if(tokens[start.index].type == TokenType.Quotes)
+								{
+									string include = source.Substring(startOffset, start.sourceOffset - startOffset);
+									ProcessUntil(tokens, ref start, p => tokens[p.index].type == TokenType.LineBreak, subProcessors);
+									outList.Add(new KeyValuePair<TokenRange, string>(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset), include));
+								}
 							}
-							start = start.Step(tokens);
 						}
-
-						outList.Add(new TokenRange(new TokenRef(from.index, from.offset), new TokenRef(start.index - 1, 0), start.sourceOffset - from.sourceOffset));
-						return start;
 					}
 				}
 				return null;

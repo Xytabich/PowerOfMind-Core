@@ -17,8 +17,7 @@ namespace PowerOfMind.Graphics.Shader
 		/// </summary>
 		/// <param name="referenceId">The id of the source where this <paramref name="sourceName"/> was found</param>
 		/// <param name="sourceName">Shader source name or path whose source code is to be provided</param>
-		/// <returns><see langword="true"/> if the source is available</returns>
-		public delegate bool SourceIdProvider(int referenceId, string sourceName, out int sourceId);
+		public delegate int SourceIdProvider(int referenceId, string sourceName);
 
 		/// <summary>
 		/// 
@@ -36,26 +35,27 @@ namespace PowerOfMind.Graphics.Shader
 		{
 			var sb = new StringBuilder();
 			var includedSources = new HashSet<int>();
-
-			BuildShader(sb, 0, provideSourceCode, provideSourceId, includedSources);
-		}
-
-		private static void BuildShader(StringBuilder sb, int sourceId, SourceCodeProvider provideSourceCode, SourceIdProvider provideSourceId, HashSet<int> includedSources)
-		{
-			if(!includedSources.Add(sourceId)) return;
-
-			var code = provideSourceCode(0);
-			var tokens = TokenizeSource(code);
-			var skipRanges = new List<TokenRange>();
-			var includes = new List<TokenRange>();
 			var outInputs = new List<FieldInfo>();
 			var outUniforms = new List<FieldInfo>();
-			ProcessShaderBlockAndRemoveComments(code, tokens, new TokenSourceRef(0, 0, 0), skipRanges, includes, outInputs, outUniforms);
+
+			var ctx = new ShaderBuildContext(sb, provideSourceCode, provideSourceId, includedSources, outInputs, outUniforms);
+			BuildShader(0, ctx);
+		}
+
+		internal static void BuildShader(int sourceId, in ShaderBuildContext ctx)
+		{
+			if(!ctx.includedSources.Add(sourceId)) return;
+
+			var code = ctx.provideSourceCode(sourceId);
+			var tokens = TokenizeSource(code);
+			var skipRanges = new List<TokenRange>();
+			var includes = new List<KeyValuePair<TokenRange, string>>();
+			ProcessShaderBlockAndRemoveComments(code, tokens, new TokenSourceRef(0, 0, 0), skipRanges, includes, ctx.outInputs, ctx.outUniforms);
 
 			int skipIndex = 0;
 			int nextSkipToken = skipRanges.Count > 0 ? skipRanges[0].start.index : -1;
 			int includeIndex = 0;
-			int nextIncludeToken = includes.Count > 0 ? includes[0].start.index : -1;
+			int nextIncludeToken = includes.Count > 0 ? includes[0].Key.start.index : -1;
 			int prevSourceOffset = 0;
 			int sourceOffset = 0;
 			for(int i = 0; i < tokens.Count; i++)
@@ -69,9 +69,9 @@ namespace PowerOfMind.Graphics.Shader
 					}
 					if(prevSourceOffset != sourceOffset)
 					{
-						sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
+						ctx.sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
 					}
-					sb.Append(' ');//For safety, if the block is between words
+					ctx.sb.Append(' ');//For safety, if the block is between words
 
 					sourceOffset += range.length;
 					prevSourceOffset = sourceOffset;
@@ -88,17 +88,17 @@ namespace PowerOfMind.Graphics.Shader
 				}
 				if(nextIncludeToken == i)
 				{
-					var range = includes[includeIndex];
+					var range = includes[includeIndex].Key;
 					if(range.start.offset != 0)
 					{
 						sourceOffset += range.start.offset;
 					}
 					if(prevSourceOffset != sourceOffset)
 					{
-						sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
+						ctx.sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
 					}
 
-					//TODO: include
+					BuildShader(ctx.provideSourceId(sourceId, includes[includeIndex].Value), ctx);
 
 					sourceOffset += range.length;
 					prevSourceOffset = sourceOffset;
@@ -108,7 +108,7 @@ namespace PowerOfMind.Graphics.Shader
 					}
 
 					includeIndex++;
-					nextIncludeToken = includes.Count > includeIndex ? includes[includeIndex].start.index : -1;
+					nextIncludeToken = includes.Count > includeIndex ? includes[includeIndex].Key.start.index : -1;
 
 					i += range.end.index - range.start.index;
 					continue;
@@ -117,11 +117,11 @@ namespace PowerOfMind.Graphics.Shader
 			}
 			if(prevSourceOffset != sourceOffset)
 			{
-				sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
+				ctx.sb.Append(code, prevSourceOffset, sourceOffset - prevSourceOffset);
 			}
 		}
 
-		internal static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> skipRanges, List<TokenRange> includes, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
+		internal static void ProcessShaderBlockAndRemoveComments(string source, List<Token> tokens, TokenSourceRef start, List<TokenRange> skipRanges, List<KeyValuePair<TokenRange, string>> includes, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
 		{
 			//TODO: same as ExtractBlockAndRemoveComments but also should handle includes, aliases & etc. by the way, aliases should look like:
 			//[POSITION]//doesn't matter on new line or same line
@@ -137,7 +137,7 @@ namespace PowerOfMind.Graphics.Shader
 				s => ShaderParserHelpers.ProcessBlock(tokens, s, skipComments),
 				s => ShaderParserHelpers.CollectUniform(source, tokens, s, outUniforms, skipComments),
 				s => ShaderParserHelpers.CollectInput(source, tokens, s, outInputs, skipComments),
-				s => ShaderParserHelpers.CollectInclude(source, tokens, s, includes),
+				s => ShaderParserHelpers.CollectInclude(source, tokens, s, includes, skipComments),
 				s => ShaderParserHelpers.SkipCommentBlock(tokens, s, skipRanges),
 				s => ShaderParserHelpers.SkipCommentLine(tokens, s, skipRanges)
 			);
@@ -222,6 +222,10 @@ namespace PowerOfMind.Graphics.Shader
 						break;
 					case '=':
 						currentType = TokenType.Equal;
+						currentSize = 1;
+						break;
+					case '"':
+						currentType = TokenType.Quotes;
 						currentSize = 1;
 						break;
 					case '{':
@@ -403,7 +407,8 @@ namespace PowerOfMind.Graphics.Shader
 			ParenthesesClose,
 			Hash,
 			Equal,
-			Semicolon
+			Semicolon,
+			Quotes
 		}
 
 		internal struct FieldInfo
@@ -423,6 +428,26 @@ namespace PowerOfMind.Graphics.Shader
 		}
 
 		internal delegate TokenSourceRef? TryProcessTokensDelegate(TokenSourceRef start);
+
+		internal struct ShaderBuildContext
+		{
+			public StringBuilder sb;
+			public SourceCodeProvider provideSourceCode;
+			public SourceIdProvider provideSourceId;
+			public HashSet<int> includedSources;
+			public List<FieldInfo> outInputs;
+			public List<FieldInfo> outUniforms;
+
+			public ShaderBuildContext(StringBuilder sb, SourceCodeProvider provideSourceCode, SourceIdProvider provideSourceId, HashSet<int> includedSources, List<FieldInfo> outInputs, List<FieldInfo> outUniforms)
+			{
+				this.sb = sb;
+				this.provideSourceCode = provideSourceCode;
+				this.provideSourceId = provideSourceId;
+				this.includedSources = includedSources;
+				this.outInputs = outInputs;
+				this.outUniforms = outUniforms;
+			}
+		}
 
 		public enum ParseFlags
 		{
