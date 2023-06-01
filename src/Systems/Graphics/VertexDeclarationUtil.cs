@@ -23,7 +23,7 @@ namespace PowerOfMind.Graphics
 				{
 					var field = fields[i];
 					var fieldType = field.FieldType;
-					var componentType = EnumVertexComponentType.None;
+					var componentType = EnumVertexComponentType.Unknown;
 					uint componentSize = 1;
 					int location = -1;
 					string alias = null;
@@ -43,7 +43,7 @@ namespace PowerOfMind.Graphics
 						componentType = attr.Type;
 						switch(componentType)
 						{
-							case EnumVertexComponentType.None: break;
+							case EnumVertexComponentType.Unknown: break;
 							case EnumVertexComponentType.UByte:
 							case EnumVertexComponentType.SByte:
 								componentSize = typeSize;
@@ -77,7 +77,7 @@ namespace PowerOfMind.Graphics
 						}
 					}
 
-					if(componentType == EnumVertexComponentType.None)
+					if(componentType == EnumVertexComponentType.Unknown)
 					{
 						if(fieldType.IsPrimitive)
 						{

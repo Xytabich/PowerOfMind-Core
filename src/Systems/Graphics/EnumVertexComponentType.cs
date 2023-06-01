@@ -2,7 +2,7 @@
 {
 	public enum EnumVertexComponentType : ushort
 	{
-		None = 0,
+		Unknown = 0,
 		UByte,
 		SByte,
 		UShort,

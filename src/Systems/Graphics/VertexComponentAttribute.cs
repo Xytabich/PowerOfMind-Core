@@ -11,6 +11,6 @@ namespace PowerOfMind.Graphics
 		public string Alias = null;
 		public bool Normalized = false;
 		public bool AsInteger = false;
-		public EnumVertexComponentType Type = EnumVertexComponentType.None;
+		public EnumVertexComponentType Type = EnumVertexComponentType.Unknown;
 	}
 }
