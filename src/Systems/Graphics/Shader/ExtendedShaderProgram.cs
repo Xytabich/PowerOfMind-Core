@@ -18,6 +18,8 @@ namespace PowerOfMind.Systems.Graphics.Shader
 
 		public bool Compile()
 		{
+			//indexOf('#'); if #include - read until newline or comment; if #alias - check '//' comment before, and search for 'in' or 'uniform' on next line
+			//check #include isn't commented
 			throw new System.NotImplementedException();
 		}
 

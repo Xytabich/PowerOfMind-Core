@@ -86,8 +86,13 @@
     <Compile Include="src\Systems\Graphics\IVertexStruct.cs" />
     <Compile Include="src\Systems\Graphics\MeshData.cs" />
     <Compile Include="src\Systems\Graphics\RenderExtensions.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderParser.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderParserHelpers.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ExtendedShaderProgram.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\IExtendedShaderProgram.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\IUniformVariableHandler.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderInputDeclaration.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderVertexAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\UniformPropertyHandle.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderUniformDeclaration.cs" />
     <Compile Include="src\Systems\Graphics\VertexDeclarationUtil.cs" />
     <Compile Include="src\Systems\Multiblock\BlockMultiblockMain.cs" />
     <Compile Include="src\Systems\Multiblock\BlockMultiblockSurrogate.cs" />

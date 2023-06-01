@@ -1,0 +1,15 @@
+C:\VSMods18\tools\ShaderGen\bin\Debug\net6.0\ShaderGen.exe
+C:\VSMods18\tools\ShaderGen\bin\Debug\net6.0\ShaderGen.deps.json
+C:\VSMods18\tools\ShaderGen\bin\Debug\net6.0\ShaderGen.runtimeconfig.json
+C:\VSMods18\tools\ShaderGen\bin\Debug\net6.0\ShaderGen.dll
+C:\VSMods18\tools\ShaderGen\bin\Debug\net6.0\ShaderGen.pdb
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.csproj.AssemblyReference.cache
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.GeneratedMSBuildEditorConfig.editorconfig
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.AssemblyInfoInputs.cache
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.AssemblyInfo.cs
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.csproj.CoreCompileInputs.cache
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.dll
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\refint\ShaderGen.dll
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.pdb
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ShaderGen.genruntimeconfig.cache
+C:\VSMods18\tools\ShaderGen\obj\Debug\net6.0\ref\ShaderGen.dll
