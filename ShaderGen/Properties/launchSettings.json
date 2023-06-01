@@ -1,8 +1,0 @@
-{
-  "profiles": {
-    "ShaderGen": {
-      "commandName": "Project",
-      "commandLineArgs": "shadergen.exe -w \"C:\\VSMods18\\tools\\ShaderGen\\bin\\Debug\\net6.0\" -o \"C:\\VSMods18\\tools\\ShaderGen\\bin\\Debug\\net6.0\" -f \"standard.vsh\""
-    }
-  }
-}
