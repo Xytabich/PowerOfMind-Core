@@ -62,7 +62,7 @@ namespace PowerOfMind.Graphics
 				{
 					alias = null;
 				}
-				attributes[i] = new ShaderVertexAttribute(i, name, alias, compType, size * compSize);
+				attributes[i] = new ShaderVertexAttribute(GL.GetAttribLocation(handle, name), name, alias, compType, size * compSize);
 			}
 			Array.Sort(attributes, InputComparer.Instance);
 			return attributes;
@@ -193,7 +193,8 @@ namespace PowerOfMind.Graphics
 				{
 					alias = null;
 				}
-				uniforms[i] = new UniformPropertyHandle(i, name, alias, compType, structType, size * compSize, uniformHandlers.TryFindHandler(structType, compType, compSize));
+				uniforms[i] = new UniformPropertyHandle(GL.GetUniformLocation(handle, name), name, alias,
+					compType, structType, size * compSize, uniformHandlers.TryFindHandler(structType, compType, compSize));
 			}
 			Array.Sort(uniforms, UniformComparer.Instance);
 			return uniforms;
