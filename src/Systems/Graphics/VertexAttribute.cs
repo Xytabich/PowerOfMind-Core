@@ -42,7 +42,7 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Specifies the data type of each component in the array.
 		/// </summary>
-		public readonly EnumVertexComponentType Type;
+		public readonly EnumShaderPrimitiveType Type;
 		/// <summary>
 		/// Specifies whether fixed-point data values should be normalized or converted directly as fixed-point values when they are accessed.
 		/// </summary>
@@ -52,7 +52,7 @@ namespace PowerOfMind.Graphics
 		/// </summary>
 		public readonly bool IntegerTarget;
 
-		public VertexAttribute(string name, string alias, int location, uint stride, uint offset, uint instanceDivisor, uint size, EnumVertexComponentType type, bool normalized, bool integerTarget)
+		public VertexAttribute(string name, string alias, int location, uint stride, uint offset, uint instanceDivisor, uint size, EnumShaderPrimitiveType type, bool normalized, bool integerTarget)
 		{
 			Name = name;
 			Alias = alias;

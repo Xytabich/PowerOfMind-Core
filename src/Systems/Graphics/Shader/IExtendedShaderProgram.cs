@@ -1,14 +1,18 @@
 ﻿using Vintagestory.API.Client;
 
-namespace PowerOfMind.Systems.Graphics.Shader
+namespace PowerOfMind.Graphics.Shader
 {
 	public interface IExtendedShaderProgram : IShaderProgram
 	{
-		ShaderInputDeclaration[] Inputs { get; }
-		ShaderUniformDeclaration[] Uniforms { get; }
+		ShaderInputDeclaration Inputs { get; }
+		ShaderUniformDeclaration Uniforms { get; }
 
-		ref readonly UniformPropertyHandle FindUniform(string name);
+		int FindUniformLocation(string name);
 
-		ref readonly UniformPropertyHandle FindUniformByAlias(string name);
+		int FindUniformLocationByAlias(string alias);
+
+		void BindTexture(int location, EnumTextureTarget target, int textureId);
+
+		void BindTexture(int location, EnumTextureTarget target, int textureId, int textureNumber);
 	}
 }

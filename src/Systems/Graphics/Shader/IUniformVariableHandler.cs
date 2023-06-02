@@ -1,4 +1,4 @@
-﻿namespace PowerOfMind.Systems.Graphics.Shader
+﻿namespace PowerOfMind.Graphics.Shader
 {
 	internal interface IUniformVariableHandler
 	{

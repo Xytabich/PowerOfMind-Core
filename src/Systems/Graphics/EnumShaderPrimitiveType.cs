@@ -1,6 +1,6 @@
 ﻿namespace PowerOfMind.Graphics
 {
-	public enum EnumVertexComponentType : ushort
+	public enum EnumShaderPrimitiveType : ushort
 	{
 		Unknown = 0,
 		UByte,
@@ -11,6 +11,7 @@
 		Int,
 		Half,
 		Float,
+		Double,
 		UInt2101010Rev,
 		Int2101010Rev
 	}

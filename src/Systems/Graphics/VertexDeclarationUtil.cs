@@ -23,7 +23,7 @@ namespace PowerOfMind.Graphics
 				{
 					var field = fields[i];
 					var fieldType = field.FieldType;
-					var componentType = EnumVertexComponentType.Unknown;
+					var componentType = EnumShaderPrimitiveType.Unknown;
 					uint componentSize = 1;
 					int location = -1;
 					string alias = null;
@@ -43,31 +43,38 @@ namespace PowerOfMind.Graphics
 						componentType = attr.Type;
 						switch(componentType)
 						{
-							case EnumVertexComponentType.Unknown: break;
-							case EnumVertexComponentType.UByte:
-							case EnumVertexComponentType.SByte:
+							case EnumShaderPrimitiveType.Unknown: break;
+							case EnumShaderPrimitiveType.UByte:
+							case EnumShaderPrimitiveType.SByte:
 								componentSize = typeSize;
 								break;
-							case EnumVertexComponentType.UShort:
-							case EnumVertexComponentType.Short:
-							case EnumVertexComponentType.Half:
+							case EnumShaderPrimitiveType.UShort:
+							case EnumShaderPrimitiveType.Short:
+							case EnumShaderPrimitiveType.Half:
 								componentSize = typeSize / 2;
 								if(typeSize != (componentSize * 2))
 								{
 									throw new Exception(string.Format("The '{0}' field has an invalid size for the specified component type", field));
 								}
 								break;
-							case EnumVertexComponentType.UInt:
-							case EnumVertexComponentType.Int:
-							case EnumVertexComponentType.Float:
+							case EnumShaderPrimitiveType.UInt:
+							case EnumShaderPrimitiveType.Int:
+							case EnumShaderPrimitiveType.Float:
 								componentSize = typeSize / 4;
 								if(typeSize != (componentSize * 4))
 								{
 									throw new Exception(string.Format("The '{0}' field has an invalid size for the specified component type", field));
 								}
 								break;
-							case EnumVertexComponentType.Int2101010Rev:
-							case EnumVertexComponentType.UInt2101010Rev:
+							case EnumShaderPrimitiveType.Double:
+								componentSize = typeSize / 8;
+								if(typeSize != (componentSize * 8))
+								{
+									throw new Exception(string.Format("The '{0}' field has an invalid size for the specified component type", field));
+								}
+								break;
+							case EnumShaderPrimitiveType.Int2101010Rev:
+							case EnumShaderPrimitiveType.UInt2101010Rev:
 								componentSize = 4;
 								if(typeSize != 4)
 								{
@@ -77,35 +84,38 @@ namespace PowerOfMind.Graphics
 						}
 					}
 
-					if(componentType == EnumVertexComponentType.Unknown)
+					if(componentType == EnumShaderPrimitiveType.Unknown)
 					{
 						if(fieldType.IsPrimitive)
 						{
 							switch(Type.GetTypeCode(fieldType))
 							{
 								case TypeCode.Boolean:
-									componentType = EnumVertexComponentType.UByte;
+									componentType = EnumShaderPrimitiveType.UByte;
 									break;
 								case TypeCode.Byte:
-									componentType = EnumVertexComponentType.UByte;
+									componentType = EnumShaderPrimitiveType.UByte;
 									break;
 								case TypeCode.SByte:
-									componentType = EnumVertexComponentType.SByte;
+									componentType = EnumShaderPrimitiveType.SByte;
 									break;
 								case TypeCode.Int16:
-									componentType = EnumVertexComponentType.Short;
+									componentType = EnumShaderPrimitiveType.Short;
 									break;
 								case TypeCode.UInt16:
-									componentType = EnumVertexComponentType.UShort;
+									componentType = EnumShaderPrimitiveType.UShort;
 									break;
 								case TypeCode.Int32:
-									componentType = EnumVertexComponentType.Int;
+									componentType = EnumShaderPrimitiveType.Int;
 									break;
 								case TypeCode.UInt32:
-									componentType = EnumVertexComponentType.UInt;
+									componentType = EnumShaderPrimitiveType.UInt;
 									break;
 								case TypeCode.Single:
-									componentType = EnumVertexComponentType.Float;
+									componentType = EnumShaderPrimitiveType.Float;
+									break;
+								case TypeCode.Double:
+									componentType = EnumShaderPrimitiveType.Double;
 									break;
 								default:
 									throw new Exception(string.Format("Type {0} cannot be converted to component type", fieldType));

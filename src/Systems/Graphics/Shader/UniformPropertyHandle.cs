@@ -1,29 +1,31 @@
-﻿using PowerOfMind.Graphics;
-using System;
+﻿using System;
 
-namespace PowerOfMind.Systems.Graphics.Shader
+namespace PowerOfMind.Graphics.Shader
 {
 	public readonly struct UniformPropertyHandle
 	{
 		public readonly string Name;
 		public readonly string Alias;
 		public readonly int Location;
-		public readonly EnumVertexComponentType ComponentType;
-		public readonly int ComponentSize;
+		public readonly EnumShaderPrimitiveType Type;
+		public readonly EnumUniformStructType StructType;
+		public readonly int Size;
 
 		private readonly IUniformVariableHandler handler;
 
-		internal UniformPropertyHandle(string name, string alias, int location, EnumVertexComponentType componentType, int componentSize, IUniformVariableHandler handler)
+		internal UniformPropertyHandle(int location, string name, string alias, EnumShaderPrimitiveType type, EnumUniformStructType structType, int size, IUniformVariableHandler handler)
 		{
-			Name = name;
-			Alias = alias;
 			Location = location;
-			ComponentType = componentType;
-			ComponentSize = componentSize;
+			Name = name;
+			Alias = alias?.ToUpperInvariant();
+			StructType = structType;
+			Type = type;
+			Size = size;
+
 			this.handler = handler;
 		}
 
-		public unsafe void SetValue<T>(T* ptr, int count = 1) where T : unmanaged
+		public unsafe void SetValue<T>(T* ptr, int count) where T : unmanaged
 		{
 			if(handler == null) throw new Exception("This property cannot be assigned in this way");
 			handler.SetValue(Location, ptr, count);
