@@ -18,8 +18,8 @@ namespace PowerOfMind.Graphics.Shader
 		public ShaderInputDeclaration Inputs { get; private set; }
 		public ShaderUniformDeclaration Uniforms { get; private set; }
 
-		protected Dictionary<string, int> uniformNameToLocation = new Dictionary<string, int>();
-		protected Dictionary<string, int> uniformAliasToLocation = new Dictionary<string, int>();
+		protected Dictionary<string, int> uniformNameToIndex = new Dictionary<string, int>();
+		protected Dictionary<string, int> uniformAliasToIndex = new Dictionary<string, int>();
 		protected readonly GraphicsSystem graphics;
 		protected ShaderStage[] stages;
 		protected int handle = 0;
@@ -153,85 +153,87 @@ namespace PowerOfMind.Graphics.Shader
 			}
 		}
 
-		public void BindTexture(int location, EnumTextureTarget target, int textureId)
+		public void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId)
 		{
-			BindTexture(location, target, textureId, Uniforms.LocationToTextureUnit[location]);
+			if(uniformIndex < 0) return;
+			BindTexture(uniformIndex, target, textureId, Uniforms.IndexToTextureUnit[uniformIndex]);
 		}
 
-		public void BindTexture(int location, EnumTextureTarget target, int textureId, int textureNumber)
+		public void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId, int textureNumber)
 		{
-			graphics.BindTexture(location, target, textureId, textureNumber, 0, ClampTexturesToEdge);
+			if(uniformIndex < 0) return;
+			graphics.BindTexture(Uniforms[uniformIndex].Location, target, textureId, textureNumber, 0, ClampTexturesToEdge);
 		}
 
 		public void BindTexture2D(string samplerName, int textureId, int textureNumber)
 		{
-			BindTexture(FindUniformLocation(samplerName), EnumTextureTarget.Texture2D, textureId, textureNumber);
+			BindTexture(FindUniformIndex(samplerName), EnumTextureTarget.Texture2D, textureId, textureNumber);
 		}
 
 		public void BindTextureCube(string samplerName, int textureId, int textureNumber)
 		{
-			BindTexture(FindUniformLocation(samplerName), EnumTextureTarget.TextureCubeMap, textureId, textureNumber);
+			BindTexture(FindUniformIndex(samplerName), EnumTextureTarget.TextureCubeMap, textureId, textureNumber);
 		}
 
 		public void Uniform(string uniformName, float value)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValue(value);
+			Uniforms[FindUniformIndex(uniformName)].SetValue(value);
 		}
 
 		public void Uniform(string uniformName, int value)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValue(value);
+			Uniforms[FindUniformIndex(uniformName)].SetValue(value);
 		}
 
 		public void Uniform(string uniformName, Vec2f value)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValue(value);
+			Uniforms[FindUniformIndex(uniformName)].SetValue(value);
 		}
 
 		public void Uniform(string uniformName, Vec3f value)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValue(value);
+			Uniforms[FindUniformIndex(uniformName)].SetValue(value);
 		}
 
 		public void Uniform(string uniformName, Vec4f value)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValue(value);
+			Uniforms[FindUniformIndex(uniformName)].SetValue(value);
 		}
 
 		public void Uniforms4(string uniformName, int count, float[] values)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValues(values, count);
+			Uniforms[FindUniformIndex(uniformName)].SetValues(values, count);
 		}
 
 		public void UniformMatrices(string uniformName, int count, float[] matrix)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValues(matrix, count);
+			Uniforms[FindUniformIndex(uniformName)].SetValues(matrix, count);
 		}
 
 		public void UniformMatrices4x3(string uniformName, int count, float[] matrix)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValues(matrix, count);
+			Uniforms[FindUniformIndex(uniformName)].SetValues(matrix, count);
 		}
 
 		public void UniformMatrix(string uniformName, float[] matrix)
 		{
-			Uniforms[FindUniformLocation(uniformName)].SetValue(matrix);
+			Uniforms[FindUniformIndex(uniformName)].SetValue(matrix);
 		}
 
-		public int FindUniformLocation(string name)
+		public int FindUniformIndex(string name)
 		{
-			if(uniformNameToLocation.TryGetValue(name, out int loc))
+			if(uniformNameToIndex.TryGetValue(name, out int index))
 			{
-				return loc;
+				return index;
 			}
 			return -1;
 		}
 
-		public int FindUniformLocationByAlias(string alias)
+		public int FindUniformIndexByAlias(string alias)
 		{
-			if(uniformAliasToLocation.TryGetValue(alias.ToUpperInvariant(), out int loc))
+			if(uniformAliasToIndex.TryGetValue(alias.ToUpperInvariant(), out int index))
 			{
-				return loc;
+				return index;
 			}
 			return -1;
 		}
@@ -265,8 +267,8 @@ namespace PowerOfMind.Graphics.Shader
 			var textureMap = new Dictionary<int, int>();
 			for(int i = 0; i < uniforms.Length; i++)
 			{
-				if(!string.IsNullOrEmpty(uniforms[i].Name)) uniformNameToLocation[uniforms[i].Name] = i;
-				if(!string.IsNullOrEmpty(uniforms[i].Alias)) uniformAliasToLocation[uniforms[i].Alias] = i;
+				if(!string.IsNullOrEmpty(uniforms[i].Name)) uniformNameToIndex[uniforms[i].Name] = i;
+				if(!string.IsNullOrEmpty(uniforms[i].Alias)) uniformAliasToIndex[uniforms[i].Alias] = i;
 
 				switch(uniforms[i].StructType)
 				{

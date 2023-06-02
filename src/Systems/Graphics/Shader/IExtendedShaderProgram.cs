@@ -7,12 +7,12 @@ namespace PowerOfMind.Graphics.Shader
 		ShaderInputDeclaration Inputs { get; }
 		ShaderUniformDeclaration Uniforms { get; }
 
-		int FindUniformLocation(string name);
+		int FindUniformIndex(string name);
 
-		int FindUniformLocationByAlias(string alias);
+		int FindUniformIndexByAlias(string alias);
 
-		void BindTexture(int location, EnumTextureTarget target, int textureId);
+		void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId);
 
-		void BindTexture(int location, EnumTextureTarget target, int textureId, int textureNumber);
+		void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId, int textureNumber);
 	}
 }

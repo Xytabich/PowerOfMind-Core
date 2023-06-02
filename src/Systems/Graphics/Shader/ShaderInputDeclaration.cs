@@ -4,7 +4,7 @@
 	{
 		public readonly ShaderVertexAttribute[] Attributes;
 
-		public ref readonly ShaderVertexAttribute this[int location] { get { return ref Attributes[location]; } }
+		public ref readonly ShaderVertexAttribute this[int index] { get { return ref Attributes[index]; } }
 
 		public ShaderInputDeclaration(ShaderVertexAttribute[] attributes)
 		{

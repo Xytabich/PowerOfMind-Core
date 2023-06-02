@@ -100,6 +100,7 @@
     <Compile Include="src\Systems\Graphics\Shader\ShaderStage.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderUniformExtensions.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderVertexAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\StandardIncludeBindings.cs" />
     <Compile Include="src\Systems\Graphics\Shader\UniformPropertyHandle.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderUniformDeclaration.cs" />
     <Compile Include="src\Systems\Graphics\VertexDeclarationUtil.cs" />
