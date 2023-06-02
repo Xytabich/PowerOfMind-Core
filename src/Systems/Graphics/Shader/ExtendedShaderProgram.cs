@@ -24,10 +24,11 @@ namespace PowerOfMind.Graphics.Shader
 		protected ShaderStage[] stages;
 		protected int handle = 0;
 
-		protected Func<IExtendedShaderProgram, Action[]> createUseBindings;
 		protected Action[] useBindings = null;
 
-		public ExtendedShaderProgram(GraphicsSystem graphics, string passName, Func<IExtendedShaderProgram, Action[]> createUseBindings, params ShaderStage[] stages)
+		private Func<IExtendedShaderProgram, Action> createUseBindings = null;
+
+		public ExtendedShaderProgram(GraphicsSystem graphics, string passName, Func<IExtendedShaderProgram, Action> createUseBindings, params ShaderStage[] stages)
 		{
 			this.graphics = graphics;
 			this.PassName = passName;
@@ -49,11 +50,10 @@ namespace PowerOfMind.Graphics.Shader
 			}
 		}
 
-		protected ExtendedShaderProgram(GraphicsSystem graphics, string passName, Func<IExtendedShaderProgram, Action[]> createUseBindings)
+		protected ExtendedShaderProgram(GraphicsSystem graphics, string passName)
 		{
 			this.graphics = graphics;
 			this.PassName = passName;
-			this.createUseBindings = createUseBindings;
 		}
 
 		public virtual bool Compile()
@@ -63,7 +63,7 @@ namespace PowerOfMind.Graphics.Shader
 
 			foreach(var stage in stages)
 			{
-				if(!stage.EnsureVersionSupported(graphics.Logger))
+				if(!stage.EnsureVersionSupported(graphics, graphics.Logger))
 				{
 					LoadError = true;
 					return false;
@@ -114,7 +114,7 @@ namespace PowerOfMind.Graphics.Shader
 			useBindings = null;
 			if(createUseBindings != null)
 			{
-				useBindings = createUseBindings(this);
+				useBindings = new Action[] { createUseBindings(this) };
 			}
 
 			graphics.Logger.Notification("Loaded shader programm for render pass {0}.", PassName);

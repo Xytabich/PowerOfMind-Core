@@ -14,13 +14,14 @@ namespace PowerOfMind.Graphics.Shader
 		public static readonly string SHADERS_LOC = AssetCategory.shaders.Code + "/";
 		public static readonly string SHADERINCLUDES_LOC = AssetCategory.shaderincludes.Code + "/";
 
+		public delegate Action GenBindingsDelegate(IExtendedShaderProgram shader);
+
 		private static readonly KeyValuePair<EnumShaderType, string>[] shaderTypes = new KeyValuePair<EnumShaderType, string>[] {
 			new KeyValuePair<EnumShaderType, string>(EnumShaderType.VertexShader, ".vsh"),
 			new KeyValuePair<EnumShaderType, string>(EnumShaderType.FragmentShader, ".fsh"),
 			new KeyValuePair<EnumShaderType, string>(EnumShaderType.GeometryShader, ".gsh")
 		};
 
-		private delegate Action GenBindingsDelegate(IExtendedShaderProgram shader);
 		private static readonly KeyValuePair<string, GenBindingsDelegate>[] includeBindings = new KeyValuePair<string, GenBindingsDelegate>[] {
 			new KeyValuePair<string, GenBindingsDelegate>("fogandlight.fsh", GenFogAndLightFragmentBindings),
 			new KeyValuePair<string, GenBindingsDelegate>("fogandlight.vsh", GenFogAndLightVertexBindings),
@@ -31,10 +32,17 @@ namespace PowerOfMind.Graphics.Shader
 		};
 
 		private readonly AssetLocation location;
+		private readonly System.Func<EnumShaderType, string> shaderDefinitionsProvider;
+		private readonly System.Func<IExtendedShaderProgram, Action> createUseBindings;
 
-		public AssetShaderProgram(GraphicsSystem graphics, string passName, AssetLocation location) : base(graphics, passName, null)
+		public AssetShaderProgram(GraphicsSystem graphics, string passName, AssetLocation location,
+			System.Func<EnumShaderType, string> shaderDefinitionsProvider,
+			System.Func<IExtendedShaderProgram, Action> createUseBindings)
+			: base(graphics, passName, null)
 		{
 			this.location = location;
+			this.shaderDefinitionsProvider = shaderDefinitionsProvider;
+			this.createUseBindings = createUseBindings;
 		}
 
 		public override bool Compile()
@@ -44,14 +52,14 @@ namespace PowerOfMind.Graphics.Shader
 			HashSet<string> includes = null;
 			foreach(var pair in shaderTypes)
 			{
-				var assetLoc = baseLoc.WithPathAppendix(pair.Value);
+				var assetLoc = baseLoc.Clone().WithPathAppendix(pair.Value);
 				var asset = graphics.Api.Assets.TryGet(assetLoc, loadAsset: true);
 				if(asset != null)
 				{
 					try
 					{
 						var mainCode = asset.ToText();
-						var code = graphics.ShaderPreprocessor.PreprocessShaderAsset(pair.Key, assetLoc, asset, out var version);
+						var code = graphics.ShaderPreprocessor.PreprocessShaderAsset(pair.Key, assetLoc, asset, shaderDefinitionsProvider, out var version);
 						var inputAliasMap = Array.Empty<KeyValuePair<string, string>>();
 						if(pair.Key == EnumShaderType.VertexShader)
 						{
@@ -62,7 +70,7 @@ namespace PowerOfMind.Graphics.Shader
 						{
 							foreach(var include in graphics.ShaderPreprocessor.locationToId)
 							{
-								if(include.Value == 0 || include.Key.Domain != "game")
+								if(include.Value != 0 && include.Key.Domain == "game")
 								{
 									if(includes == null) includes = new HashSet<string>();
 									includes.Add(Path.GetFileName(include.Key.Path));
@@ -87,8 +95,18 @@ namespace PowerOfMind.Graphics.Shader
 					{
 						if(includes.Contains(pair.Key))
 						{
+							if(bindings == null) bindings = new List<Action>();
 							bindings.Add(pair.Value(this));
 						}
+					}
+				}
+				if(createUseBindings != null)
+				{
+					var action = createUseBindings(this);
+					if(action != null)
+					{
+						if(bindings == null) bindings = new List<Action>();
+						bindings.Add(action);
 					}
 				}
 				this.useBindings = bindings?.ToArray();

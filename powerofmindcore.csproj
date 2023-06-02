@@ -91,12 +91,14 @@
     <Compile Include="src\Systems\Graphics\RenderExtensions.cs" />
     <Compile Include="src\Systems\Graphics\EnumUniformStructType.cs" />
     <Compile Include="src\Systems\Graphics\Shader\AssetShaderProgram.cs" />
+    <Compile Include="src\Systems\Graphics\EnumTextureTarget.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ExtendedShaderProgram.cs" />
     <Compile Include="src\Systems\Graphics\Shader\IExtendedShaderProgram.cs" />
     <Compile Include="src\Systems\Graphics\Shader\IUniformVariableHandler.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderInputDeclaration.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderPreprocessor.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderStage.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderUniformExtensions.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderVertexAttribute.cs" />
     <Compile Include="src\Systems\Graphics\Shader\UniformPropertyHandle.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderUniformDeclaration.cs" />

@@ -51,7 +51,7 @@ namespace PowerOfMind.Graphics.Shader
 			graphics.AttachStageToProgram(programHandle, handle);
 		}
 
-		public bool EnsureVersionSupported(ILogger logger)
+		public bool EnsureVersionSupported(GraphicsSystem graphics, ILogger logger)
 		{
 			try
 			{

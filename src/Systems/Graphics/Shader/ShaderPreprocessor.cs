@@ -20,7 +20,7 @@ namespace PowerOfMind.Graphics.Shader
 		internal Dictionary<string, string> inputAliasMap = null;
 		internal Dictionary<string, string> uniformAliasMap = null;
 		internal Dictionary<AssetLocation, int> locationToId = null;
-		internal List<string> sources = null;
+		internal List<KeyValuePair<AssetLocation, string>> sources = null;
 
 		internal ShaderPreprocessor(GraphicsSystem graphics)
 		{
@@ -38,9 +38,11 @@ namespace PowerOfMind.Graphics.Shader
 		/// <param name="getSourceCode">Returns the source code for the given id. The main source has id 0</param>
 		/// <param name="outInputAliasMap">Dictionary where input aliases will be written. Can be null if no aliases need to be looked up</param>
 		/// <param name="outUniformAliasMap">Dictionary where uniform aliases will be written. Can be null if no aliases need to be looked up</param>
+		/// <param name="shaderDefinitionsProvider">Provider of custom definitions that will be added after the version and standard definitions</param>
 		/// <returns>Prepared shader code</returns>
-		public string PreprocessShaderCode(EnumShaderType type, SourceIdProvider getSourceId, SourceCodeProvider getSourceCode, out string version,
-			IDictionary<string, string> outInputAliasMap = null, IDictionary<string, string> outUniformAliasMap = null)
+		public string PreprocessShaderCode(EnumShaderType type, SourceIdProvider getSourceId, SourceCodeProvider getSourceCode,
+			out string version, IDictionary<string, string> outInputAliasMap = null, IDictionary<string, string> outUniformAliasMap = null,
+			System.Func<EnumShaderType, string> shaderDefinitionsProvider = null)
 		{
 			var code = getSourceCode(0);
 			int length = code.Length;
@@ -61,7 +63,7 @@ namespace PowerOfMind.Graphics.Shader
 					{
 						if(IsWordWithSpace(code, index + 1, "version"))
 						{
-							index += 9;
+							index += 8;
 							while(index < length)
 							{
 								if(char.IsWhiteSpace(code, index))
@@ -90,7 +92,12 @@ namespace PowerOfMind.Graphics.Shader
 							}
 							sb.Append(code, 0, index - numberSize);
 							version = graphics.GetPlatformShaderVersion(code.Substring(index - numberSize, numberSize));
-							sb.AppendLine(version);
+							sb.Append(version);
+
+							int fromIndex = index;
+							GoToNewLine(code, ref index);
+							sb.Append(code, fromIndex, index - fromIndex);
+							sb.AppendLine();
 							break;
 						}
 					}
@@ -109,6 +116,12 @@ namespace PowerOfMind.Graphics.Shader
 				sb.AppendLine(graphics.VertexShaderDefines);
 			}
 
+			string defs = shaderDefinitionsProvider?.Invoke(type);
+			if(!string.IsNullOrEmpty(defs))
+			{
+				sb.AppendLine(defs);
+			}
+
 			PreprocessShaderCode(0, index, getSourceId, getSourceCode, outInputAliasMap, outUniformAliasMap);
 
 			return sb.ToString();
@@ -124,7 +137,7 @@ namespace PowerOfMind.Graphics.Shader
 			sources = null;
 		}
 
-		internal string PreprocessShaderAsset(EnumShaderType type, AssetLocation location, IAsset asset, out string version)
+		internal string PreprocessShaderAsset(EnumShaderType type, AssetLocation location, IAsset asset, System.Func<EnumShaderType, string> shaderDefinitionsProvider, out string version)
 		{
 			if(inputAliasMap == null) inputAliasMap = new Dictionary<string, string>();
 			else inputAliasMap.Clear();
@@ -132,19 +145,21 @@ namespace PowerOfMind.Graphics.Shader
 			else uniformAliasMap.Clear();
 			if(locationToId == null) locationToId = new Dictionary<AssetLocation, int>();
 			else locationToId.Clear();
-			if(sources == null) sources = new List<string>();
+			if(sources == null) sources = new List<KeyValuePair<AssetLocation, string>>();
 			else sources.Clear();
 
-			locationToId[location.Clone()] = 0;
-			sources.Add(asset.ToText());
-			var code = PreprocessShaderCode(type, file => {
+			location = location.Clone();
+			locationToId[location] = 0;
+			sources.Add(new KeyValuePair<AssetLocation, string>(location, asset.ToText()));
+			var code = PreprocessShaderCode(type, (refId, file) => {
+				var refLoc = sources[refId].Key;
 				var baseLoc = new AssetLocation(file);
 				bool hasDomain = baseLoc.HasDomain();
 				int id;
 				AssetLocation loc;
 				if(!hasDomain)
 				{
-					baseLoc.Domain = location.Domain;
+					baseLoc.Domain = refLoc.Domain;
 					loc = baseLoc.Clone().WithPathPrefixOnce(AssetShaderProgram.SHADERS_LOC);
 					if(locationToId.TryGetValue(loc, out id)) return id;
 					loc = baseLoc.Clone().WithPathPrefixOnce(AssetShaderProgram.SHADERINCLUDES_LOC);
@@ -161,12 +176,12 @@ namespace PowerOfMind.Graphics.Shader
 				IAsset subAsset;
 				if(!hasDomain)
 				{
-					baseLoc.Domain = location.Domain;
+					baseLoc.Domain = refLoc.Domain;
 					loc = baseLoc.Clone().WithPathPrefixOnce(AssetShaderProgram.SHADERS_LOC);
 					if((subAsset = assets.TryGet(loc, loadAsset: true)) != null)
 					{
 						id = sources.Count;
-						sources.Add(subAsset.ToText());
+						sources.Add(new KeyValuePair<AssetLocation, string>(loc, subAsset.ToText()));
 						locationToId[loc] = id;
 						return id;
 					}
@@ -174,7 +189,7 @@ namespace PowerOfMind.Graphics.Shader
 					if((subAsset = assets.TryGet(loc, loadAsset: true)) != null)
 					{
 						id = sources.Count;
-						sources.Add(subAsset.ToText());
+						sources.Add(new KeyValuePair<AssetLocation, string>(loc, subAsset.ToText()));
 						locationToId[loc] = id;
 						return id;
 					}
@@ -185,7 +200,7 @@ namespace PowerOfMind.Graphics.Shader
 				if((subAsset = assets.TryGet(loc, loadAsset: true)) != null)
 				{
 					id = sources.Count;
-					sources.Add(subAsset.ToText());
+					sources.Add(new KeyValuePair<AssetLocation, string>(loc, subAsset.ToText()));
 					locationToId[loc] = id;
 					return id;
 				}
@@ -193,13 +208,13 @@ namespace PowerOfMind.Graphics.Shader
 				if((subAsset = assets.TryGet(loc, loadAsset: true)) != null)
 				{
 					id = sources.Count;
-					sources.Add(subAsset.ToText());
+					sources.Add(new KeyValuePair<AssetLocation, string>(loc, subAsset.ToText()));
 					locationToId[loc] = id;
 					return id;
 				}
 
 				throw new FileNotFoundException(string.Format("Shader include '{0}' not found", file));
-			}, id => sources[id], out version, type == EnumShaderType.VertexShader ? inputAliasMap : null, uniformAliasMap);
+			}, id => sources[id].Value, out version, type == EnumShaderType.VertexShader ? inputAliasMap : null, uniformAliasMap, shaderDefinitionsProvider);
 
 			sources.Clear();
 
@@ -214,6 +229,7 @@ namespace PowerOfMind.Graphics.Shader
 			var code = getSourceCode(id);
 			int length = code.Length;
 
+			int fromIndex = index;
 			index = code.IndexOf('#', index);
 			while(index >= 0)
 			{
@@ -221,13 +237,17 @@ namespace PowerOfMind.Graphics.Shader
 				{
 					if(!IsCommented(code, index - 1) && IsLine(code, index - 1))
 					{
+						sb.Append(code, fromIndex, index - fromIndex);
+
 						int start = index;
 						index += 8;
 						SkipWhitespace(code, ref index);
 						var name = ExtractInclude(code, ref index);
-						int nextId = getSourceId(name.Trim());
+						int nextId = getSourceId(id, name.Trim());
 						PreprocessShaderCode(nextId, 0, getSourceId, getSourceCode, outInputAliasMap, outUniformAliasMap);
 						sb.AppendLine();
+
+						fromIndex = index;
 					}
 					else index += 9;
 				}
@@ -278,6 +298,8 @@ namespace PowerOfMind.Graphics.Shader
 				else index++;
 				index = code.IndexOf('#', index);
 			}
+
+			sb.Append(code, fromIndex, length - fromIndex);
 		}
 
 		private static bool IsCommented(string code, int index, bool checkIsLine = false)
@@ -513,7 +535,7 @@ _result:
 			return code.Substring(start, index - start);
 		}
 
-		public delegate int SourceIdProvider(string includeName);
+		public delegate int SourceIdProvider(int refId, string includeName);
 
 		public delegate string SourceCodeProvider(int sourceId);
 	}

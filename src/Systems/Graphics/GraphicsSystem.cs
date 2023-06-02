@@ -32,9 +32,12 @@ namespace PowerOfMind.Graphics
 
 		public override void StartClientSide(ICoreClientAPI api)
 		{
+			this.api = api;
 			uniformHandlers = new UniformVariableHandlers();
 			ShaderPreprocessor = new ShaderPreprocessor(this);
 			api.Event.ReloadShader += ReloadShaders;
+
+			api.ModLoader.GetModSystem<GraphicsSystem>().LoadAssetShader("testmod:testshader", new AssetLocation("standard"));
 		}
 
 		public override void Dispose()
@@ -48,9 +51,20 @@ namespace PowerOfMind.Graphics
 			reloadShaderListeners.Clear();
 		}
 
-		public IShaderProgram LoadAssetShader(string passName, AssetLocation location)
+		/// <summary>
+		/// Creates a shader that will be loaded from an asset.
+		/// Automatically recompiled on a shader reload event.
+		/// Inclusions can be prefixed with the domain in which to look for the file, for example "game:fogandlight.vsh".
+		/// Inclusions without the specified domain will be searched in order from near to far, i.e. order: "shaderDomain:shaders/", "shaderDomain:shaderincludes/", "game:shaders/", "game:shaderincludes/".
+		/// </summary>
+		/// <param name="location">Shader location (domain and name without extension), shader parts will be searched in "shaders/" directory. For example "game:standard" will load the standard shader from the game folder</param>
+		/// <param name="shaderDefinitionsProvider">Can be used to provide custom definitions for a specific shader</param>
+		/// <param name="useBindingsFactory">A factory that creates an action that is executed every time <see cref="IShaderProgram.Use"/> is called, which can be used to set uniforms and so on.</param>
+		public IExtendedShaderProgram LoadAssetShader(string passName, AssetLocation location,
+			System.Func<EnumShaderType, string> shaderDefinitionsProvider = null,
+			System.Func<IExtendedShaderProgram, Action> useBindingsFactory = null)
 		{
-			var shader = new AssetShaderProgram(this, passName, location);
+			var shader = new AssetShaderProgram(this, passName, location, shaderDefinitionsProvider, useBindingsFactory);
 			RegisterShader(shader);
 			return shader;
 		}
