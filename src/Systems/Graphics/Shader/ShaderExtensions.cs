@@ -21,5 +21,20 @@ namespace PowerOfMind.Graphics
 				textureNumber = -1;
 			}
 		}
+
+		public static void BindTexture2D(this IExtendedShaderProgram shader, string samplerName, int textureId)
+		{
+			shader.BindTexture(shader.FindUniformIndex(samplerName), EnumTextureTarget.Texture2D, textureId);
+		}
+
+		public static void BindTexture2D(this IExtendedShaderProgram shader, string samplerName, EnumTextureTarget target, int textureId)
+		{
+			shader.BindTexture(shader.FindUniformIndex(samplerName), target, textureId);
+		}
+
+		public static void BindTexture2D(this IExtendedShaderProgram shader, string samplerName, EnumTextureTarget target, int textureId, int textureNumber)
+		{
+			shader.BindTexture(shader.FindUniformIndex(samplerName), target, textureId, textureNumber);
+		}
 	}
 }

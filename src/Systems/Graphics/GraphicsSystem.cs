@@ -149,7 +149,21 @@ namespace PowerOfMind.Graphics
 		internal void BindTexture(EnumTextureTarget target, int textureId, int textureNumber, int sampler, bool clampTexturesToEdge)
 		{
 			GL.ActiveTexture(TextureUnit.Texture0 + textureNumber);
-			var texTarget = target == EnumTextureTarget.TextureCubeMap ? TextureTarget.TextureCubeMap : TextureTarget.Texture2D;
+			var texTarget = TextureTarget.Texture2D;
+			switch(target)
+			{
+				case EnumTextureTarget.Texture1D: texTarget = TextureTarget.Texture1D; break;
+				case EnumTextureTarget.Texture2D: texTarget = TextureTarget.Texture2D; break;
+				case EnumTextureTarget.Texture3D: texTarget = TextureTarget.Texture3D; break;
+				case EnumTextureTarget.TextureRectangle: texTarget = TextureTarget.TextureRectangle; break;
+				case EnumTextureTarget.TextureCubeMap: texTarget = TextureTarget.TextureCubeMap; break;
+				case EnumTextureTarget.Texture1DArray: texTarget = TextureTarget.Texture1DArray; break;
+				case EnumTextureTarget.Texture2DArray: texTarget = TextureTarget.Texture2DArray; break;
+				case EnumTextureTarget.TextureBuffer: texTarget = TextureTarget.TextureBuffer; break;
+				case EnumTextureTarget.TextureCubeMapArray: texTarget = TextureTarget.TextureCubeMapArray; break;
+				case EnumTextureTarget.Texture2DMultisample: texTarget = TextureTarget.Texture2DMultisample; break;
+				case EnumTextureTarget.Texture2DMultisampleArray: texTarget = TextureTarget.Texture2DMultisampleArray; break;
+			}
 			GL.BindTexture(texTarget, textureId);
 			if(sampler != 0)
 			{

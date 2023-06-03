@@ -166,11 +166,6 @@ namespace PowerOfMind.Graphics.Shader
 			graphics.BindTexture(target, textureId, textureNumber, 0, ClampTexturesToEdge);
 		}
 
-		public void BindTexture2D(string samplerName, int textureId)
-		{
-			BindTexture(FindUniformIndex(samplerName), EnumTextureTarget.Texture2D, textureId);
-		}
-
 		public void BindTexture2D(string samplerName, int textureId, int textureNumber)
 		{
 			BindTexture(FindUniformIndex(samplerName), EnumTextureTarget.Texture2D, textureId, textureNumber);
