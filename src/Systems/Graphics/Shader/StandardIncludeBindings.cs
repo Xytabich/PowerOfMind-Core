@@ -46,10 +46,8 @@ namespace PowerOfMind.Graphics.Shader
 			int _horizontalResolution = shader.FindUniformIndex("horizontalResolution");
 			int _playerToSealevelOffset = shader.FindUniformIndex("playerToSealevelOffset");
 
-			int _sky = shader.FindUniformIndex("sky");
-			int _skyTex = shader.Uniforms.IndexToTextureUnit[_sky];
-			int _glow = shader.FindUniformIndex("glow");
-			int _glowTex = shader.Uniforms.IndexToTextureUnit[_glow];
+			shader.FindTextureBindings("sky", out var _sky, out var _skyTex);
+			shader.FindTextureBindings("glow", out var _glow, out var _glowTex);
 
 			return () => {
 				var uniforms = shader.Uniforms;
@@ -154,8 +152,8 @@ namespace PowerOfMind.Graphics.Shader
 			int _viewDistance = shader.FindUniformIndex("viewDistance");
 			int _viewDistanceLod0 = shader.FindUniformIndex("viewDistanceLod0");
 
-			int _shadowMapFar = shader.FindUniformIndex("shadowMapFar");
-			int _shadowMapNear = shader.FindUniformIndex("shadowMapNear");
+			shader.FindTextureBindings("shadowMapFar", out var _shadowMapFar, out var _shadowMapFarTex);
+			shader.FindTextureBindings("shadowMapNear", out var _shadowMapNear, out var _shadowMapNearTex);
 
 			return () => {
 				var uniforms = shader.Uniforms;
@@ -168,8 +166,8 @@ namespace PowerOfMind.Graphics.Shader
 				{
 					FrameBufferRef farFb = ScreenManager.Platform.FrameBuffers[11];
 					FrameBufferRef nearFb = ScreenManager.Platform.FrameBuffers[12];
-					shader.BindTexture(_shadowMapFar, EnumTextureTarget.Texture2D, farFb.DepthTextureId);
-					shader.BindTexture(_shadowMapNear, EnumTextureTarget.Texture2D, nearFb.DepthTextureId);
+					shader.BindTexture(_shadowMapFar, EnumTextureTarget.Texture2D, farFb.DepthTextureId, _shadowMapFarTex);
+					shader.BindTexture(_shadowMapNear, EnumTextureTarget.Texture2D, nearFb.DepthTextureId, _shadowMapNearTex);
 					uniforms[_shadowMapWidthInv].SetValue(1f / farFb.Width);
 					uniforms[_shadowMapHeightInv].SetValue(1f / farFb.Height);
 					uniforms[_viewDistance].SetValue((float)ClientSettings.ViewDistance);

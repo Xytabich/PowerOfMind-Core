@@ -96,6 +96,7 @@
     <Compile Include="src\Systems\Graphics\Shader\ExtendedShaderProgram.cs" />
     <Compile Include="src\Systems\Graphics\Shader\IExtendedShaderProgram.cs" />
     <Compile Include="src\Systems\Graphics\Shader\IUniformVariableHandler.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\ShaderExtensions.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderInputDeclaration.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderPreprocessor.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderStage.cs" />
