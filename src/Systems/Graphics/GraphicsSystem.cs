@@ -146,10 +146,9 @@ namespace PowerOfMind.Graphics
 			GL.UseProgram(0);
 		}
 
-		internal void BindTexture(int location, EnumTextureTarget target, int textureId, int textureNumber, int sampler, bool clampTexturesToEdge)
+		internal void BindTexture(EnumTextureTarget target, int textureId, int textureNumber, int sampler, bool clampTexturesToEdge)
 		{
-			GL.Uniform1(location, textureNumber);
-			GL.ActiveTexture((TextureUnit)(33984 + textureNumber));
+			GL.ActiveTexture(TextureUnit.Texture0 + textureNumber);
 			var texTarget = target == EnumTextureTarget.TextureCubeMap ? TextureTarget.TextureCubeMap : TextureTarget.Texture2D;
 			GL.BindTexture(texTarget, textureId);
 			if(sampler != 0)

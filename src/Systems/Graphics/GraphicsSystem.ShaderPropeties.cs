@@ -64,7 +64,6 @@ namespace PowerOfMind.Graphics
 				}
 				attributes[i] = new ShaderVertexAttribute(GL.GetAttribLocation(handle, name), name, alias, compType, size * compSize);
 			}
-			Array.Sort(attributes, InputComparer.Instance);
 			return attributes;
 		}
 
@@ -112,80 +111,80 @@ namespace PowerOfMind.Graphics
 					case ActiveUniformType.DoubleVec3: structType = EnumUniformStructType.Vector; compType = EnumShaderPrimitiveType.Double; compSize = 3; break;
 					case ActiveUniformType.DoubleVec4: structType = EnumUniformStructType.Vector; compType = EnumShaderPrimitiveType.Double; compSize = 4; break;
 
-					case ActiveUniformType.Sampler1D: structType = EnumUniformStructType.Sampler1D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2D: structType = EnumUniformStructType.Sampler2D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler3D: structType = EnumUniformStructType.Sampler3D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.SamplerCube: structType = EnumUniformStructType.SamplerCube; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler1DShadow: structType = EnumUniformStructType.Sampler1DShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DShadow: structType = EnumUniformStructType.Sampler2DShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DRect: structType = EnumUniformStructType.Sampler2DRect; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DRectShadow: structType = EnumUniformStructType.Sampler2DRectShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler1DArray: structType = EnumUniformStructType.Sampler1DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DArray: structType = EnumUniformStructType.Sampler2DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.SamplerBuffer: structType = EnumUniformStructType.SamplerBuffer; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler1DArrayShadow: structType = EnumUniformStructType.Sampler1DArrayShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DArrayShadow: structType = EnumUniformStructType.Sampler2DArrayShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.SamplerCubeShadow: structType = EnumUniformStructType.SamplerCubeShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler1D: structType = EnumUniformStructType.IntSampler1D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler2D: structType = EnumUniformStructType.IntSampler2D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler3D: structType = EnumUniformStructType.IntSampler3D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSamplerCube: structType = EnumUniformStructType.IntSamplerCube; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler2DRect: structType = EnumUniformStructType.IntSampler2DRect; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler1DArray: structType = EnumUniformStructType.IntSampler1DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler2DArray: structType = EnumUniformStructType.IntSampler2DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSamplerBuffer: structType = EnumUniformStructType.IntSamplerBuffer; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler1D: structType = EnumUniformStructType.UnsignedIntSampler1D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler2D: structType = EnumUniformStructType.UnsignedIntSampler2D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler3D: structType = EnumUniformStructType.UnsignedIntSampler3D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSamplerCube: structType = EnumUniformStructType.UnsignedIntSamplerCube; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler2DRect: structType = EnumUniformStructType.UnsignedIntSampler2DRect; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler1DArray: structType = EnumUniformStructType.UnsignedIntSampler1DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler2DArray: structType = EnumUniformStructType.UnsignedIntSampler2DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSamplerBuffer: structType = EnumUniformStructType.UnsignedIntSamplerBuffer; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.SamplerCubeMapArray: structType = EnumUniformStructType.SamplerCubeMapArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.SamplerCubeMapArrayShadow: structType = EnumUniformStructType.SamplerCubeMapArrayShadow; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSamplerCubeMapArray: structType = EnumUniformStructType.IntSamplerCubeMapArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSamplerCubeMapArray: structType = EnumUniformStructType.UnsignedIntSamplerCubeMapArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image1D: structType = EnumUniformStructType.Image1D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image2D: structType = EnumUniformStructType.Image2D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image3D: structType = EnumUniformStructType.Image3D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image2DRect: structType = EnumUniformStructType.Image2DRect; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.ImageCube: structType = EnumUniformStructType.ImageCube; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.ImageBuffer: structType = EnumUniformStructType.ImageBuffer; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image1DArray: structType = EnumUniformStructType.Image1DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image2DArray: structType = EnumUniformStructType.Image2DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.ImageCubeMapArray: structType = EnumUniformStructType.ImageCubeMapArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image2DMultisample: structType = EnumUniformStructType.Image2DMultisample; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Image2DMultisampleArray: structType = EnumUniformStructType.Image2DMultisampleArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage1D: structType = EnumUniformStructType.IntImage1D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage2D: structType = EnumUniformStructType.IntImage2D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage3D: structType = EnumUniformStructType.IntImage3D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage2DRect: structType = EnumUniformStructType.IntImage2DRect; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImageCube: structType = EnumUniformStructType.IntImageCube; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImageBuffer: structType = EnumUniformStructType.IntImageBuffer; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage1DArray: structType = EnumUniformStructType.IntImage1DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage2DArray: structType = EnumUniformStructType.IntImage2DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImageCubeMapArray: structType = EnumUniformStructType.IntImageCubeMapArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage2DMultisample: structType = EnumUniformStructType.IntImage2DMultisample; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntImage2DMultisampleArray: structType = EnumUniformStructType.IntImage2DMultisampleArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage1D: structType = EnumUniformStructType.UnsignedIntImage1D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage2D: structType = EnumUniformStructType.UnsignedIntImage2D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage3D: structType = EnumUniformStructType.UnsignedIntImage3D; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage2DRect: structType = EnumUniformStructType.UnsignedIntImage2DRect; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImageCube: structType = EnumUniformStructType.UnsignedIntImageCube; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImageBuffer: structType = EnumUniformStructType.UnsignedIntImageBuffer; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage1DArray: structType = EnumUniformStructType.UnsignedIntImage1DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage2DArray: structType = EnumUniformStructType.UnsignedIntImage2DArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImageCubeMapArray: structType = EnumUniformStructType.UnsignedIntImageCubeMapArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage2DMultisample: structType = EnumUniformStructType.UnsignedIntImage2DMultisample; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntImage2DMultisampleArray: structType = EnumUniformStructType.UnsignedIntImage2DMultisampleArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DMultisample: structType = EnumUniformStructType.Sampler2DMultisample; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler2DMultisample: structType = EnumUniformStructType.IntSampler2DMultisample; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler2DMultisample: structType = EnumUniformStructType.UnsignedIntSampler2DMultisample; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.Sampler2DMultisampleArray: structType = EnumUniformStructType.Sampler2DMultisampleArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.IntSampler2DMultisampleArray: structType = EnumUniformStructType.IntSampler2DMultisampleArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntSampler2DMultisampleArray: structType = EnumUniformStructType.UnsignedIntSampler2DMultisampleArray; compType = EnumShaderPrimitiveType.UInt; break;
-					case ActiveUniformType.UnsignedIntAtomicCounter: structType = EnumUniformStructType.UnsignedIntAtomicCounter; compType = EnumShaderPrimitiveType.UInt; break;
+					case ActiveUniformType.Sampler1D: structType = EnumUniformStructType.Sampler1D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2D: structType = EnumUniformStructType.Sampler2D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler3D: structType = EnumUniformStructType.Sampler3D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.SamplerCube: structType = EnumUniformStructType.SamplerCube; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler1DShadow: structType = EnumUniformStructType.Sampler1DShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DShadow: structType = EnumUniformStructType.Sampler2DShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DRect: structType = EnumUniformStructType.Sampler2DRect; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DRectShadow: structType = EnumUniformStructType.Sampler2DRectShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler1DArray: structType = EnumUniformStructType.Sampler1DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DArray: structType = EnumUniformStructType.Sampler2DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.SamplerBuffer: structType = EnumUniformStructType.SamplerBuffer; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler1DArrayShadow: structType = EnumUniformStructType.Sampler1DArrayShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DArrayShadow: structType = EnumUniformStructType.Sampler2DArrayShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.SamplerCubeShadow: structType = EnumUniformStructType.SamplerCubeShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler1D: structType = EnumUniformStructType.IntSampler1D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler2D: structType = EnumUniformStructType.IntSampler2D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler3D: structType = EnumUniformStructType.IntSampler3D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSamplerCube: structType = EnumUniformStructType.IntSamplerCube; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler2DRect: structType = EnumUniformStructType.IntSampler2DRect; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler1DArray: structType = EnumUniformStructType.IntSampler1DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler2DArray: structType = EnumUniformStructType.IntSampler2DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSamplerBuffer: structType = EnumUniformStructType.IntSamplerBuffer; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler1D: structType = EnumUniformStructType.UnsignedIntSampler1D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler2D: structType = EnumUniformStructType.UnsignedIntSampler2D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler3D: structType = EnumUniformStructType.UnsignedIntSampler3D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSamplerCube: structType = EnumUniformStructType.UnsignedIntSamplerCube; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler2DRect: structType = EnumUniformStructType.UnsignedIntSampler2DRect; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler1DArray: structType = EnumUniformStructType.UnsignedIntSampler1DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler2DArray: structType = EnumUniformStructType.UnsignedIntSampler2DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSamplerBuffer: structType = EnumUniformStructType.UnsignedIntSamplerBuffer; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.SamplerCubeMapArray: structType = EnumUniformStructType.SamplerCubeMapArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.SamplerCubeMapArrayShadow: structType = EnumUniformStructType.SamplerCubeMapArrayShadow; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSamplerCubeMapArray: structType = EnumUniformStructType.IntSamplerCubeMapArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSamplerCubeMapArray: structType = EnumUniformStructType.UnsignedIntSamplerCubeMapArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image1D: structType = EnumUniformStructType.Image1D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image2D: structType = EnumUniformStructType.Image2D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image3D: structType = EnumUniformStructType.Image3D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image2DRect: structType = EnumUniformStructType.Image2DRect; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.ImageCube: structType = EnumUniformStructType.ImageCube; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.ImageBuffer: structType = EnumUniformStructType.ImageBuffer; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image1DArray: structType = EnumUniformStructType.Image1DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image2DArray: structType = EnumUniformStructType.Image2DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.ImageCubeMapArray: structType = EnumUniformStructType.ImageCubeMapArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image2DMultisample: structType = EnumUniformStructType.Image2DMultisample; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Image2DMultisampleArray: structType = EnumUniformStructType.Image2DMultisampleArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage1D: structType = EnumUniformStructType.IntImage1D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage2D: structType = EnumUniformStructType.IntImage2D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage3D: structType = EnumUniformStructType.IntImage3D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage2DRect: structType = EnumUniformStructType.IntImage2DRect; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImageCube: structType = EnumUniformStructType.IntImageCube; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImageBuffer: structType = EnumUniformStructType.IntImageBuffer; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage1DArray: structType = EnumUniformStructType.IntImage1DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage2DArray: structType = EnumUniformStructType.IntImage2DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImageCubeMapArray: structType = EnumUniformStructType.IntImageCubeMapArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage2DMultisample: structType = EnumUniformStructType.IntImage2DMultisample; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntImage2DMultisampleArray: structType = EnumUniformStructType.IntImage2DMultisampleArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage1D: structType = EnumUniformStructType.UnsignedIntImage1D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage2D: structType = EnumUniformStructType.UnsignedIntImage2D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage3D: structType = EnumUniformStructType.UnsignedIntImage3D; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage2DRect: structType = EnumUniformStructType.UnsignedIntImage2DRect; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImageCube: structType = EnumUniformStructType.UnsignedIntImageCube; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImageBuffer: structType = EnumUniformStructType.UnsignedIntImageBuffer; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage1DArray: structType = EnumUniformStructType.UnsignedIntImage1DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage2DArray: structType = EnumUniformStructType.UnsignedIntImage2DArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImageCubeMapArray: structType = EnumUniformStructType.UnsignedIntImageCubeMapArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage2DMultisample: structType = EnumUniformStructType.UnsignedIntImage2DMultisample; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntImage2DMultisampleArray: structType = EnumUniformStructType.UnsignedIntImage2DMultisampleArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DMultisample: structType = EnumUniformStructType.Sampler2DMultisample; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler2DMultisample: structType = EnumUniformStructType.IntSampler2DMultisample; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler2DMultisample: structType = EnumUniformStructType.UnsignedIntSampler2DMultisample; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.Sampler2DMultisampleArray: structType = EnumUniformStructType.Sampler2DMultisampleArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.IntSampler2DMultisampleArray: structType = EnumUniformStructType.IntSampler2DMultisampleArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntSampler2DMultisampleArray: structType = EnumUniformStructType.UnsignedIntSampler2DMultisampleArray; compType = EnumShaderPrimitiveType.Int; break;
+					case ActiveUniformType.UnsignedIntAtomicCounter: structType = EnumUniformStructType.UnsignedIntAtomicCounter; compType = EnumShaderPrimitiveType.Int; break;
 					default: compType = EnumShaderPrimitiveType.Unknown; break;
 				}
 				string alias;
@@ -196,20 +195,8 @@ namespace PowerOfMind.Graphics
 				uniforms[i] = new UniformPropertyHandle(GL.GetUniformLocation(handle, name), name, alias,
 					compType, structType, size * compSize, uniformHandlers.TryFindHandler(structType, compType, compSize));
 			}
-			Array.Sort(uniforms, UniformComparer.Instance);
+			Array.Sort(uniforms, UniformComparer.Instance);//Sort by type to create proper order for textures, e.g. shadows don't work on texture unit 0 for some reason
 			return uniforms;
-		}
-
-		private class InputComparer : IComparer<ShaderVertexAttribute>
-		{
-			public static readonly InputComparer Instance = new InputComparer();
-
-			int IComparer<ShaderVertexAttribute>.Compare(ShaderVertexAttribute x, ShaderVertexAttribute y)
-			{
-				int c = x.Location.CompareTo(y.Location);
-				if(c != 0) return c;
-				return (x.Name ?? string.Empty).CompareTo(y.Name ?? string.Empty);
-			}
 		}
 
 		private class UniformComparer : IComparer<UniformPropertyHandle>
@@ -218,9 +205,11 @@ namespace PowerOfMind.Graphics
 
 			int IComparer<UniformPropertyHandle>.Compare(UniformPropertyHandle x, UniformPropertyHandle y)
 			{
-				int c = x.Location.CompareTo(y.Location);
+				int c = ((int)x.StructType).CompareTo((int)y.StructType);
 				if(c != 0) return c;
-				return (x.Name ?? string.Empty).CompareTo(y.Name ?? string.Empty);
+				c = ((int)x.Type).CompareTo((int)y.Type);
+				if(c != 0) return c;
+				return x.Location.CompareTo(y.Location);
 			}
 		}
 	}

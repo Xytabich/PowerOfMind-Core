@@ -86,8 +86,9 @@
     <Compile Include="src\Systems\Graphics\GraphicsSystem.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.ShaderPropeties.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.UniformVariableHandlers.cs" />
-    <Compile Include="src\Systems\Graphics\IVertexStruct.cs" />
-    <Compile Include="src\Systems\Graphics\MeshData.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\IVertexStruct.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\MeshData.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\UniformAlias.cs" />
     <Compile Include="src\Systems\Graphics\RenderExtensions.cs" />
     <Compile Include="src\Systems\Graphics\EnumUniformStructType.cs" />
     <Compile Include="src\Systems\Graphics\Shader\AssetShaderProgram.cs" />
@@ -103,7 +104,7 @@
     <Compile Include="src\Systems\Graphics\Shader\StandardIncludeBindings.cs" />
     <Compile Include="src\Systems\Graphics\Shader\UniformPropertyHandle.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderUniformDeclaration.cs" />
-    <Compile Include="src\Systems\Graphics\VertexDeclarationUtil.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\VertexDeclarationUtil.cs" />
     <Compile Include="src\Systems\Multiblock\BlockMultiblockMain.cs" />
     <Compile Include="src\Systems\Multiblock\BlockMultiblockSurrogate.cs" />
     <Compile Include="src\Systems\Multiblock\IMultiblockMainBlock.cs" />
@@ -111,10 +112,10 @@
     <Compile Include="src\Systems\Multiblock\IMultiblockPhantomBlock.cs" />
     <Compile Include="src\Systems\Multiblock\MultiblockManager.cs" />
     <Compile Include="src\Systems\Graphics\EnumShaderPrimitiveType.cs" />
-    <Compile Include="src\Systems\Graphics\VertexAttribute.cs" />
-    <Compile Include="src\Systems\Graphics\VertexAttributeAlias.cs" />
-    <Compile Include="src\Systems\Graphics\VertexComponentAttribute.cs" />
-    <Compile Include="src\Systems\Graphics\VertexDeclaration.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\VertexAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\VertexAttributeAlias.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\VertexComponentAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\Mesh\VertexDeclaration.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
