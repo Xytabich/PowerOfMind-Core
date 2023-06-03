@@ -1,10 +1,11 @@
-﻿using Vintagestory.API.Client;
+﻿using PowerOfMind.Graphics.Drawable;
+using Vintagestory.API.Client;
 
 namespace PowerOfMind.Graphics
 {
-	public class MeshData<T> where T : unmanaged, IVertexStruct
+	public class MeshData<T> : IDrawableData where T : unmanaged, IVertexStruct
 	{
-		public EnumDrawMode drawMode;
+		public EnumDrawMode DrawMode;
 
 		public T[] Vertices;
 		public int VerticesCount = 0;
@@ -24,6 +25,11 @@ namespace PowerOfMind.Graphics
 
 		public VertexDeclaration VertexDeclaration;
 
+		EnumDrawMode IDrawableData.DrawMode => DrawMode;
+		int IDrawableData.IndicesCount => IndicesCount;
+		int IDrawableData.VerticesCount => VerticesCount;
+		int IDrawableData.VertexBuffersCount => 1;
+
 		public MeshData(T[] vertices, int[] indices)
 		{
 			Vertices = vertices;
@@ -33,6 +39,22 @@ namespace PowerOfMind.Graphics
 			IndicesCount = indices.Length;
 
 			VertexDeclaration = vertices[0].GetDeclaration();
+		}
+
+		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+		{
+			fixed(int* ptr = Indices)
+			{
+				context.Process(ptr + IndicesOffset, !IndicesStatic);
+			}
+		}
+
+		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+		{
+			fixed(T* ptr = Vertices)
+			{
+				context.Process(0, ptr + VerticesOffset, sizeof(T), VertexDeclaration, !VerticesStatic);
+			}
 		}
 	}
 }

@@ -1,5 +1,7 @@
 ﻿using OpenTK.Graphics.OpenGL;
+using PowerOfMind.Graphics.Drawable;
 using System;
+using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.Client;
 
@@ -36,12 +38,12 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Uploads the mesh data to the GPU, returns a MeshRef that can be used to update the data or free memory.
 		/// </summary>
-		public static unsafe IMeshHandle UploadMesh<T>(this IRenderAPI rapi, MeshData<T> meshData) where T : unmanaged, IVertexStruct
+		public static unsafe IDrawableHandle UploadDrawable(this IRenderAPI rapi, IDrawableData data)
 		{
-			var container = new RefContainer();
-			container.indicesCount = meshData.IndicesCount;
-			container.declaration = meshData.VertexDeclaration;
-			switch(meshData.drawMode)
+			var container = new RefContainer(data.VertexBuffersCount);
+			container.indicesCount = data.IndicesCount;
+
+			switch(data.DrawMode)
 			{
 				case EnumDrawMode.Lines:
 					container.drawMode = BeginMode.Lines;
@@ -55,51 +57,15 @@ namespace PowerOfMind.Graphics
 			}
 
 			GL.BindVertexArray(container.vao);
-			GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffer);
-			fixed(T* ptr = meshData.Vertices)
-			{
-				GL.BufferData(BufferTarget.ArrayBuffer, meshData.VerticesCount * sizeof(T), (IntPtr)(ptr + meshData.VerticesOffset),
-					meshData.VerticesStatic ? BufferUsageHint.StaticDraw : BufferUsageHint.DynamicDraw);
-			}
-			var attributes = meshData.VertexDeclaration.Attributes;
-			for(int i = attributes.Length - 1; i >= 0; i--)
-			{
-				ref readonly var attrib = ref attributes[i];
-				if(attrib.IntegerTarget)
-				{
-					GL.VertexAttribIPointer(
-						attrib.Location,
-						(int)attrib.Size,
-						convertIntComponentType[(int)attrib.Type - 1],
-						(int)attrib.Stride,
-						(IntPtr)attrib.Offset
-					);
-				}
-				else
-				{
-					GL.VertexAttribPointer(
-						attrib.Location,
-						(int)attrib.Size,
-						convertComponentType[(int)attrib.Type - 1],
-						attrib.Normalized,
-						(int)attrib.Stride,
-						(int)attrib.Offset
-					);
-				}
-				if(attrib.InstanceDivisor > 0)
-				{
-					GL.VertexAttribDivisor((uint)attrib.Location, attrib.InstanceDivisor);
-				}
-			}
+
+			var attribPointers = new List<int>();
+			data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount, attribPointers).UploadAndInitContainer, false));
 			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-			fixed(int* ptr = meshData.Indices)
-			{
-				GL.BufferData(BufferTarget.ElementArrayBuffer, 4 * meshData.IndicesCount, (IntPtr)(ptr + meshData.IndicesOffset),
-					meshData.IndicesStatic ? BufferUsageHint.StaticDraw : BufferUsageHint.DynamicDraw);
-			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			container.attribPointers = attribPointers.ToArray();
+
+			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Upload, false));
+
 			GL.BindVertexArray(0);
 			return container;
 		}
@@ -107,118 +73,94 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Recreates the data buffers for the given MeshRef, this may be needed if the number of vertices or indexes has changed.
 		/// </summary>
-		public static unsafe void ReuploadMesh<T>(this IRenderAPI rapi, IMeshHandle meshRef, MeshData<T> meshData) where T : unmanaged, IVertexStruct
+		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data)
 		{
-			var container = (RefContainer)meshRef;
-			container.indicesCount = meshData.IndicesCount;
+			var container = (RefContainer)handle;
+			container.indicesCount = data.IndicesCount;
 
-			GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffer);
-			fixed(T* ptr = meshData.Vertices)
-			{
-				GL.BufferData(BufferTarget.ArrayBuffer, meshData.VerticesCount * sizeof(T), (IntPtr)(ptr + meshData.VerticesOffset),
-					meshData.VerticesStatic ? BufferUsageHint.StaticDraw : BufferUsageHint.DynamicDraw);
-			}
+			data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount).Upload, false));
 			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-			fixed(int* ptr = meshData.Indices)
-			{
-				GL.BufferData(BufferTarget.ElementArrayBuffer, 4 * meshData.IndicesCount, (IntPtr)(ptr + meshData.IndicesOffset),
-					meshData.IndicesStatic ? BufferUsageHint.StaticDraw : BufferUsageHint.DynamicDraw);
-			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Upload, false));
 		}
 
 		/// <summary>
 		/// Updates the vertex and index data for the given MeshRef.
-		/// If the number of vertices or indexes has changed since <see cref="UploadMesh"/>, use <see cref="ReuploadMesh"/> instead.
+		/// If the number of vertices or indexes has changed since <see cref="UploadDrawable"/>, use <see cref="ReuploadDrawable"/> instead.
 		/// </summary>
-		public static unsafe void UpdateMesh<T>(this IRenderAPI rapi, IMeshHandle meshRef, MeshData<T> meshData) where T : unmanaged, IVertexStruct
+		public static unsafe void UpdateDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data)
 		{
-			var container = (RefContainer)meshRef;
+			var container = (RefContainer)handle;
 
-			GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffer);
-			fixed(T* ptr = meshData.Vertices)
+			if(data.VerticesCount > 0)
 			{
-				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, meshData.VerticesCount * sizeof(T), (IntPtr)(ptr + meshData.VerticesOffset));
+				data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount).Update, false));
+				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 			}
-			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-			fixed(int* ptr = meshData.Indices)
+			if(data.IndicesCount > 0)
 			{
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, 4 * meshData.IndicesCount, (IntPtr)(ptr + meshData.IndicesOffset));
+				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Update, false));
 			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 		}
 
 		/// <summary>
 		/// Updates part of the mesh's data.
 		/// </summary>
-		/// <param name="verticesBufferOffset">From which buffer element to start the update</param>
 		/// <param name="indicesBufferOffset">From which buffer element to start the update</param>
-		public static unsafe void UpdateMeshPart<T>(this IRenderAPI rapi, IMeshHandle meshRef, MeshData<T> meshData, int verticesBufferOffset, int indicesBufferOffset) where T : unmanaged, IVertexStruct
+		/// <param name="verticesBufferOffsets">From which buffer element to start the update</param>
+		public static unsafe void UpdateDrawablePart(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, int indicesBufferOffset, params int[] verticesBufferOffsets)
 		{
-			var container = (RefContainer)meshRef;
+			var container = (RefContainer)handle;
 
-			if(meshData.VerticesCount > 0)
+			if(data.VerticesCount > 0)
 			{
-				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffer);
-				fixed(T* ptr = meshData.Vertices)
-				{
-					GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(verticesBufferOffset * sizeof(T)),
-						meshData.VerticesCount * sizeof(T), (IntPtr)(ptr + meshData.VerticesOffset));
-				}
+				data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount, verticesBufferOffsets).UpdatePartial, false));
 				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 			}
 
-			if(meshData.IndicesCount > 0)
+			if(data.IndicesCount > 0)
 			{
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				fixed(int* ptr = meshData.Indices)
-				{
-					GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(indicesBufferOffset * 4),
-						4 * meshData.IndicesCount, (IntPtr)(ptr + meshData.IndicesOffset));
-				}
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, indicesBufferOffset).UpdatePartial, false));
 			}
 		}
 
-		public static void RenderMesh(this IRenderAPI rapi, IMeshHandle meshRef)
+		public static void RenderDrawable(this IRenderAPI rapi, IDrawableHandle handle)
 		{
 			RuntimeStats.drawCallsCount++;
-			if(!meshRef.Initialized)
+			if(!handle.Initialized)
 			{
-				throw new ArgumentException("Fatal: Trying to render an uninitialized mesh");
+				throw new ArgumentException("Fatal: Trying to render an uninitialized drawable");
 			}
-			if(meshRef.Disposed)
+			if(handle.Disposed)
 			{
-				throw new ArgumentException("Fatal: Trying to render a disposed mesh");
+				throw new ArgumentException("Fatal: Trying to render a disposed drawable");
 			}
 
-			var container = (RefContainer)meshRef;
+			var container = (RefContainer)handle;
 			GL.BindVertexArray(container.vao);
 
-			var attributes = container.declaration.Attributes;
-			int len = attributes.Length;
+			var attribPointers = container.attribPointers;
+			int len = attribPointers.Length;
 			for(int i = 0; i < len; i++)
 			{
-				GL.EnableVertexAttribArray(attributes[i].Location);
+				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
 			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.DrawElements(container.drawMode, container.indicesCount, DrawElementsType.UnsignedInt, 0);
 			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
-				GL.DisableVertexAttribArray(attributes[i].Location);
+				GL.DisableVertexAttribArray(attribPointers[i]);
 			}
 			GL.BindVertexArray(0);
 		}
 
-		private class RefContainer : IMeshHandle
+		private class RefContainer : IDrawableHandle
 		{
-			public int vao, vertexBuffer, indexBuffer;
-			public VertexDeclaration declaration;
+			public int vao, indexBuffer;
+			public int[] vertexBuffers;
+			public int[] attribPointers;
 			public BeginMode drawMode;
 			public int indicesCount;
 
@@ -227,10 +169,14 @@ namespace PowerOfMind.Graphics
 
 			private bool disposed = false;
 
-			public RefContainer()
+			public RefContainer(int buffersCount)
 			{
 				indexBuffer = GL.GenBuffer();
-				vertexBuffer = GL.GenBuffer();
+				vertexBuffers = new int[buffersCount];
+				for(int i = 0; i < buffersCount; i++)
+				{
+					vertexBuffers[i] = GL.GenBuffer();
+				}
 				vao = GL.GenVertexArray();
 			}
 
@@ -239,20 +185,140 @@ namespace PowerOfMind.Graphics
 				if(!disposed)
 				{
 					GL.DeleteVertexArray(vao);
-					GL.DeleteBuffer(vertexBuffer);
+					for(int i = vertexBuffers.Length - 1; i >= 0; i--)
+					{
+						GL.DeleteBuffer(vertexBuffers[i]);
+					}
 					GL.DeleteBuffer(indexBuffer);
 
 					vao = 0;
 					indexBuffer = 0;
-					vertexBuffer = 0;
+					vertexBuffers = null;
 
 					disposed = true;
 				}
 			}
 		}
+
+		private class VerticesProcessorImpl
+		{
+			private readonly RefContainer container;
+			private readonly int verticesCount;
+			private readonly int[] offsets = null;
+
+			private readonly List<int> attribPointers;
+
+			public VerticesProcessorImpl(RefContainer container, int verticesCount)
+			{
+				this.container = container;
+				this.verticesCount = verticesCount;
+			}
+
+			public VerticesProcessorImpl(RefContainer container, int verticesCount, List<int> outAttribPointers)
+			{
+				this.container = container;
+				this.verticesCount = verticesCount;
+				this.attribPointers = outAttribPointers;
+			}
+
+			public VerticesProcessorImpl(RefContainer container, int verticesCount, int[] offsets)
+			{
+				this.container = container;
+				this.verticesCount = verticesCount;
+				this.offsets = offsets;
+			}
+
+			public unsafe void UploadAndInitContainer(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
+				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				var attributes = declaration.Attributes;
+				for(int i = attributes.Length - 1; i >= 0; i--)
+				{
+					ref readonly var attrib = ref attributes[i];
+					attribPointers.Add(attrib.Location);
+					if(attrib.IntegerTarget)
+					{
+						GL.VertexAttribIPointer(
+							attrib.Location,
+							(int)attrib.Size,
+							convertIntComponentType[(int)attrib.Type - 1],
+							(int)attrib.Stride,
+							(IntPtr)attrib.Offset
+						);
+					}
+					else
+					{
+						GL.VertexAttribPointer(
+							attrib.Location,
+							(int)attrib.Size,
+							convertComponentType[(int)attrib.Type - 1],
+							attrib.Normalized,
+							(int)attrib.Stride,
+							(int)attrib.Offset
+						);
+					}
+					if(attrib.InstanceDivisor > 0)
+					{
+						GL.VertexAttribDivisor((uint)attrib.Location, attrib.InstanceDivisor);
+					}
+				}
+			}
+
+			public unsafe void Upload(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
+				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+			}
+
+			public unsafe void Update(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
+				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, verticesCount * stride, (IntPtr)data);
+			}
+
+			public unsafe void UpdatePartial(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
+				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(offsets[bufferIndex] * stride), verticesCount * stride, (IntPtr)data);
+			}
+		}
+
+		private class IndicesProcessorImpl
+		{
+			private readonly RefContainer container;
+			private readonly int offset;
+
+			public IndicesProcessorImpl(RefContainer container, int offset = 0)
+			{
+				this.container = container;
+				this.offset = offset;
+			}
+
+			public unsafe void Upload(int* data, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+				GL.BufferData(BufferTarget.ElementArrayBuffer, 4 * container.indicesCount, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			}
+
+			public unsafe void Update(int* data, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, 4 * container.indicesCount, (IntPtr)data);
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			}
+
+			public unsafe void UpdatePartial(int* data, bool isDynamic)
+			{
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), 4 * container.indicesCount, (IntPtr)data);
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			}
+		}
 	}
 
-	public interface IMeshHandle : IDisposable
+	public interface IDrawableHandle : IDisposable
 	{
 		bool Initialized { get; }
 
