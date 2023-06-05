@@ -20,6 +20,10 @@ namespace PowerOfMind.Graphics.Drawable
 
 	public readonly ref struct IndicesContext
 	{
+		/// <summary>
+		/// Provide indices to the processor
+		/// </summary>
+		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
 		public unsafe delegate void ProcessorDelegate(int* indices, bool isDynamic);
 
 		public readonly bool ProvideDynamicOnly;
@@ -32,6 +36,10 @@ namespace PowerOfMind.Graphics.Drawable
 			ProvideDynamicOnly = provideDynamicOnly;
 		}
 
+		/// <summary>
+		/// Provide indices to the processor
+		/// </summary>
+		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public unsafe void Process(int* indices, bool isDynamic)
 		{
@@ -51,6 +59,10 @@ namespace PowerOfMind.Graphics.Drawable
 			ProvideDynamicOnly = provideDynamicOnly;
 		}
 
+		/// <summary>
+		/// Provide data to the processor
+		/// </summary>
+		/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public unsafe void Process<T>(int bufferIndex, T* data, int stride, bool isDynamic) where T : unmanaged, IVertexStruct
 		{
@@ -59,6 +71,10 @@ namespace PowerOfMind.Graphics.Drawable
 
 		public interface IProcessor
 		{
+			/// <summary>
+			/// Provide data to the processor
+			/// </summary>
+			/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
 			unsafe void Process<T>(int bufferIndex, T* data, int stride, bool isDynamic) where T : unmanaged, IVertexStruct;
 		}
 	}

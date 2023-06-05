@@ -73,13 +73,33 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Recreates the data buffers for the given MeshRef, this may be needed if the number of vertices or indexes has changed.
 		/// </summary>
-		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data)
+		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, bool updateVertexDeclarations = false)
 		{
 			var container = (RefContainer)handle;
 			container.indicesCount = data.IndicesCount;
 
-			data.ProvideVertices(new VerticesContext(new UploadVerticesProcessor(container, data.VerticesCount), false));
-			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+			if(updateVertexDeclarations)
+			{
+				GL.BindVertexArray(container.vao);
+
+				//Clear the previous state, nothing else needs to be changed as unused attributes won't be enabled at render time anyway
+				foreach(var loc in container.attribPointers)
+				{
+					GL.VertexAttribDivisor((uint)loc, 0);
+				}
+
+				var attribPointers = new List<int>();
+				data.ProvideVertices(new VerticesContext(new InitVerticesProcessor(container, data.VerticesCount, attribPointers), false));
+				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+				container.attribPointers = attribPointers.ToArray();
+				GL.BindVertexArray(0);
+			}
+			else
+			{
+				data.ProvideVertices(new VerticesContext(new UploadVerticesProcessor(container, data.VerticesCount), false));
+				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+			}
 
 			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Upload, false));
 		}
