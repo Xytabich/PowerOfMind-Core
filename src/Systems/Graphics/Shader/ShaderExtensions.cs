@@ -36,5 +36,14 @@ namespace PowerOfMind.Graphics
 		{
 			shader.BindTexture(shader.FindUniformIndex(samplerName), target, textureId, textureNumber);
 		}
+
+		/// <summary>
+		/// Creates a declaration that matches the shader, removing unsuitable attributes from the input declaration.
+		/// It will also assign such parameters as <see cref="VertexAttribute.Location"/> and <see cref="VertexAttribute.IntegerTarget"/>
+		/// </summary>
+		public static VertexDeclaration MapDeclaration(this IExtendedShaderProgram shader, VertexDeclaration declaration)
+		{
+			return default;
+		}
 	}
 }

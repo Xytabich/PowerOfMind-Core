@@ -15,5 +15,7 @@
 		public const string FOG_COLOR = "FOG_COLOR";
 
 		public const string EXTRA_GLOW = "EXTRA_GLOW";
+
+		public const string MAIN_TEXTURE = "MAIN_TEXTURE";
 	}
 }

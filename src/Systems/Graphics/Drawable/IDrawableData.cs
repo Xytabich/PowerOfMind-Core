@@ -41,22 +41,25 @@ namespace PowerOfMind.Graphics.Drawable
 
 	public readonly ref struct VerticesContext
 	{
-		public unsafe delegate void ProcessorDelegate(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic);
-
 		public readonly bool ProvideDynamicOnly;
 
-		private readonly ProcessorDelegate processor;
+		private readonly IProcessor processor;
 
-		public VerticesContext(ProcessorDelegate processor, bool provideDynamicOnly)
+		public VerticesContext(IProcessor processor, bool provideDynamicOnly)
 		{
 			this.processor = processor;
 			ProvideDynamicOnly = provideDynamicOnly;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+		public unsafe void Process<T>(int bufferIndex, T* data, int stride, bool isDynamic) where T : unmanaged, IVertexStruct
 		{
-			processor(bufferIndex, data, stride, declaration, isDynamic);
+			processor.Process(bufferIndex, data, stride, isDynamic);
+		}
+
+		public interface IProcessor
+		{
+			unsafe void Process<T>(int bufferIndex, T* data, int stride, bool isDynamic) where T : unmanaged, IVertexStruct;
 		}
 	}
 }

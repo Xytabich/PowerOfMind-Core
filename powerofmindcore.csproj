@@ -50,6 +50,9 @@
     <Reference Include="System.Data" />
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Xml" />
+    <Reference Include="Unity.Mathematics">
+      <HintPath>.\Unity.Mathematics.dll</HintPath>
+    </Reference>
     <Reference Include="VintagestoryAPI">
       <HintPath>C:\Games\Vintagestory18\VintagestoryAPI.dll</HintPath>
       <Private>False</Private>
@@ -82,14 +85,19 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="src\AssemblyInfo.cs" />
+    <Compile Include="src\Collections\ChainList.cs" />
+    <Compile Include="src\Collections\HeapCollection.cs" />
+    <Compile Include="src\Collections\RefList.cs" />
     <Compile Include="src\PowerOfMindCore.cs" />
+    <Compile Include="src\Systems\ChunkRender\ChunkRenderer.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\IDrawableData.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\IUniformsData.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.ShaderPropeties.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.UniformVariableHandlers.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\IVertexStruct.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\MeshData.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\UniformAlias.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\UniformAlias.cs" />
     <Compile Include="src\Systems\Graphics\RenderExtensions.cs" />
     <Compile Include="src\Systems\Graphics\EnumUniformStructType.cs" />
     <Compile Include="src\Systems\Graphics\Shader\AssetShaderProgram.cs" />

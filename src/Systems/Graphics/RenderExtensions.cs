@@ -59,7 +59,7 @@ namespace PowerOfMind.Graphics
 			GL.BindVertexArray(container.vao);
 
 			var attribPointers = new List<int>();
-			data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount, attribPointers).UploadAndInitContainer, false));
+			data.ProvideVertices(new VerticesContext(new InitVerticesProcessor(container, data.VerticesCount, attribPointers), false));
 			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
 			container.attribPointers = attribPointers.ToArray();
@@ -78,7 +78,7 @@ namespace PowerOfMind.Graphics
 			var container = (RefContainer)handle;
 			container.indicesCount = data.IndicesCount;
 
-			data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount).Upload, false));
+			data.ProvideVertices(new VerticesContext(new UploadVerticesProcessor(container, data.VerticesCount), false));
 			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 
 			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Upload, false));
@@ -94,7 +94,7 @@ namespace PowerOfMind.Graphics
 
 			if(data.VerticesCount > 0)
 			{
-				data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount).Update, false));
+				data.ProvideVertices(new VerticesContext(new UpdateVerticesProcessor(container, data.VerticesCount), false));
 				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 			}
 
@@ -115,7 +115,7 @@ namespace PowerOfMind.Graphics
 
 			if(data.VerticesCount > 0)
 			{
-				data.ProvideVertices(new VerticesContext(new VerticesProcessorImpl(container, data.VerticesCount, verticesBufferOffsets).UpdatePartial, false));
+				data.ProvideVertices(new VerticesContext(new UpdatePartialVerticesProcessor(container, data.VerticesCount, verticesBufferOffsets), false));
 				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 			}
 
@@ -200,39 +200,25 @@ namespace PowerOfMind.Graphics
 			}
 		}
 
-		private class VerticesProcessorImpl
+		private class InitVerticesProcessor : VerticesContext.IProcessor
 		{
 			private readonly RefContainer container;
 			private readonly int verticesCount;
-			private readonly int[] offsets = null;
 
 			private readonly List<int> attribPointers;
 
-			public VerticesProcessorImpl(RefContainer container, int verticesCount)
+			public InitVerticesProcessor(RefContainer container, int verticesCount, List<int> attribPointers)
 			{
 				this.container = container;
 				this.verticesCount = verticesCount;
+				this.attribPointers = attribPointers;
 			}
 
-			public VerticesProcessorImpl(RefContainer container, int verticesCount, List<int> outAttribPointers)
-			{
-				this.container = container;
-				this.verticesCount = verticesCount;
-				this.attribPointers = outAttribPointers;
-			}
-
-			public VerticesProcessorImpl(RefContainer container, int verticesCount, int[] offsets)
-			{
-				this.container = container;
-				this.verticesCount = verticesCount;
-				this.offsets = offsets;
-			}
-
-			public unsafe void UploadAndInitContainer(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
-				var attributes = declaration.Attributes;
+				var attributes = data[0].GetDeclaration().Attributes;
 				for(int i = attributes.Length - 1; i >= 0; i--)
 				{
 					ref readonly var attrib = ref attributes[i];
@@ -264,20 +250,58 @@ namespace PowerOfMind.Graphics
 					}
 				}
 			}
+		}
 
-			public unsafe void Upload(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+		private class UploadVerticesProcessor : VerticesContext.IProcessor
+		{
+			private readonly RefContainer container;
+			private readonly int verticesCount;
+
+			public UploadVerticesProcessor(RefContainer container, int verticesCount)
+			{
+				this.container = container;
+				this.verticesCount = verticesCount;
+			}
+
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
 			}
+		}
 
-			public unsafe void Update(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+		private class UpdateVerticesProcessor : VerticesContext.IProcessor
+		{
+			private readonly RefContainer container;
+			private readonly int verticesCount;
+
+			public UpdateVerticesProcessor(RefContainer container, int verticesCount)
+			{
+				this.container = container;
+				this.verticesCount = verticesCount;
+			}
+
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, verticesCount * stride, (IntPtr)data);
 			}
+		}
 
-			public unsafe void UpdatePartial(int bufferIndex, void* data, int stride, VertexDeclaration declaration, bool isDynamic)
+		private class UpdatePartialVerticesProcessor : VerticesContext.IProcessor
+		{
+			private readonly RefContainer container;
+			private readonly int verticesCount;
+			private readonly int[] offsets;
+
+			public UpdatePartialVerticesProcessor(RefContainer container, int verticesCount, int[] offsets)
+			{
+				this.container = container;
+				this.verticesCount = verticesCount;
+				this.offsets = offsets;
+			}
+
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(offsets[bufferIndex] * stride), verticesCount * stride, (IntPtr)data);
