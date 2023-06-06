@@ -35,8 +35,8 @@ namespace PowerOfMind.Systems.ChunkRender
 		private List<int> tmpIdsList = new List<int>();
 
 		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IChunkBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
-			where TVertex : struct, IVertexStruct
-			where TUniform : struct, IUniformsData
+			where TVertex : unmanaged, IVertexStruct
+			where TUniform : unmanaged, IUniformsData
 		{
 			if(!chunkToId.TryGetValue(chunk, out int cid))
 			{
@@ -346,7 +346,8 @@ namespace PowerOfMind.Systems.ChunkRender
 			public List<byte[]> verticesBlocks;
 			public List<int[]> indicesBlocks;
 
-			public KeyValuePair<uint, uint>[][] builderVertexMaps;
+			public KeyValuePair<int, int>[][] builderVertexMaps;
+			public VertexDeclaration[] builderDeclarations;
 			public int[] builderVertexOffsets;
 			public int[] builderIndexOffsets;
 
@@ -374,6 +375,8 @@ namespace PowerOfMind.Systems.ChunkRender
 					var context = new BuilderContext(this, verticesStride);
 					for(int i = 0; i < builders.Length; i++)
 					{
+						context.builderIndex = i;
+
 						builderVertexOffsets[i] = context.vertOffsetGlobal;
 						builderIndexOffsets[i] = context.indOffsetGlobal;
 
@@ -382,8 +385,6 @@ namespace PowerOfMind.Systems.ChunkRender
 
 						builder.Build(context);
 					}
-
-					context.EndBuild();
 
 					//TODO: group indices by uniforms, but since there is stream writing, uniforms should probably have some dictionary, and need a list where will be written uniform changes sequence(i.e. if uniform change detected, current offset & uniform index will be written)
 					//TODO: loop through builders & collect data, data should be splitted into the fixed blocks to reduce gc usage, block size is BLOCK_SIZE*(VertexSize or IndexSize)
@@ -397,22 +398,22 @@ namespace PowerOfMind.Systems.ChunkRender
 
 			private void InitDeclaration()
 			{
-				this.builderVertexMaps = new KeyValuePair<uint, uint>[builders.Length][];
-				var mappedDeclarations = new VertexDeclaration[builders.Length];
+				this.builderVertexMaps = new KeyValuePair<int, int>[builders.Length][];
+				this.builderDeclarations = new VertexDeclaration[builders.Length];
 				var attributes = new RefList<VertexAttribute>();
 				for(int i = 0; i < builders.Length; i++)
 				{
 					shader.MapDeclaration(container.builders[builders[i]].builderStruct.GetVertexDeclaration(), attributes);
-					mappedDeclarations[i] = new VertexDeclaration(attributes.ToArray());
+					builderDeclarations[i] = new VertexDeclaration(attributes.ToArray());
 					attributes.Clear();
 				}
 
 				int vertStride = 0;
-				var tmpMap = new List<KeyValuePair<uint, uint>>();
+				var tmpMap = new List<KeyValuePair<int, int>>();
 				var locationToAttrib = new Dictionary<int, int>();
-				for(int i = 0; i < mappedDeclarations.Length; i++)
+				for(int i = 0; i < builderDeclarations.Length; i++)
 				{
-					var declaration = mappedDeclarations[i];
+					var declaration = builderDeclarations[i];
 					for(int j = 0; j < declaration.Attributes.Length; j++)
 					{
 						if(!locationToAttrib.TryGetValue(declaration.Attributes[j].Location, out var index))
@@ -432,7 +433,7 @@ namespace PowerOfMind.Systems.ChunkRender
 								continue;
 							}
 						}
-						tmpMap.Add(new KeyValuePair<uint, uint>(declaration.Attributes[j].Offset, attributes[index].Offset));
+						tmpMap.Add(new KeyValuePair<int, int>(j, index));
 					}
 
 					builderVertexMaps[i] = tmpMap.ToArray();
@@ -484,43 +485,71 @@ namespace PowerOfMind.Systems.ChunkRender
 				public int indOffsetGlobal = 0;
 				public int indOffsetLocal = 0;
 
+				public int builderIndex = 0;
+
 				private readonly BuildTask task;
 				private readonly int verticesStride;
 
-				private byte[] currentVertBlock;
-				private int[] currentIndBlock;
-
 				private int currentVertCount;
 				private int currentIndCount;
+				private int currentVertBlock = 0;
+				private int currentIndBlock = 0;
 
 				private bool hasIndices = false;
 				private IndicesContext.ProcessorDelegate addIndicesCallback;
+
+				private Dictionary<int, int> componentsToMap = new Dictionary<int, int>();
+				private RefList<VertexAttribute> tmpAttributes = new RefList<VertexAttribute>();
 
 				public unsafe BuilderContext(BuildTask task, int verticesStride)
 				{
 					this.task = task;
 					this.verticesStride = verticesStride;
-					currentVertBlock = new byte[verticesStride * BLOCK_SIZE];
-					currentIndBlock = new int[BLOCK_SIZE];
+
+					task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
+					task.indicesBlocks.Add(new int[BLOCK_SIZE]);
+
 					addIndicesCallback = InsertIndices;
 				}
 
-				public void EndBuild()
-				{
-					task.verticesBlocks.Add(currentVertBlock);
-					task.indicesBlocks.Add(currentIndBlock);
-				}
-
-				void IChunkBuilderContext.AddData(IDrawableData data)
+				unsafe void IChunkBuilderContext.AddData(IDrawableData data)
 				{
 					currentVertCount = data.VerticesCount;
 					currentIndCount = data.IndicesCount;
 					EnsureCapacity();
-					//Buffer.MemoryCopy();
-					//TODO: create verts remap & fill missing components by builder's defaults
+					componentsToMap.Clear();
+					var map = task.builderVertexMaps[builderIndex];
+					for(int i = 0; i < map.Length; i++)
+					{
+						componentsToMap[task.declaration.Attributes[map[i].Value].Location] = i;
+					}
 					hasIndices = false;
 					data.ProvideIndices(new IndicesContext(addIndicesCallback, false));
 					data.ProvideVertices(new VerticesContext(this, false));
+
+					if(hasIndices)
+					{
+						if(componentsToMap.Count > 0)
+						{
+							var declaration = task.builderDeclarations[builderIndex];
+							var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
+							var stride = builderStruct.GetVertexStride();
+							builderStruct.ProvideVertexData(ptr => {
+								foreach(var p in componentsToMap)
+								{
+									var pair = map[p.Value];
+									CopyComponentData(pair.Value, ptr + declaration.Attributes[pair.Key].Offset, stride);
+								}
+							});
+						}
+
+						vertOffsetGlobal += currentVertCount;
+						indOffsetGlobal += currentIndCount;
+						currentVertBlock += (vertOffsetLocal + currentVertCount) / BLOCK_SIZE;
+						currentIndBlock += (indOffsetLocal + currentIndCount) / BLOCK_SIZE;
+						vertOffsetLocal = (vertOffsetLocal + currentVertCount) % BLOCK_SIZE;
+						indOffsetLocal = (indOffsetLocal + currentIndCount) % BLOCK_SIZE;
+					}
 				}
 
 				unsafe void IChunkBuilderContext.AddData<T>(IDrawableData data, T* uniformsData)
@@ -531,14 +560,137 @@ namespace PowerOfMind.Systems.ChunkRender
 				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
 				{
 					if(isDynamic || (data == null && !hasIndices)) return;
-					//TODO: insert vertices
+					tmpAttributes.Clear();
+					task.shader.MapDeclaration(data[0].GetDeclaration(), tmpAttributes);
+					for(int i = 0; i < tmpAttributes.Count; i++)
+					{
+						if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
+						{
+							int attribIndex = task.builderVertexMaps[builderIndex][mapIndex].Value;
+							ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
+							if(tmpAttributes[i].Size == vertAttrib.Size && tmpAttributes[i].Type == vertAttrib.Type)//TODO: log warning otherwise?
+							{
+								componentsToMap.Remove(tmpAttributes[i].Location);
+
+								CopyComponentData(attribIndex, (byte*)data + tmpAttributes[i].Offset, stride);
+							}
+						}
+					}
+				}
+
+				private unsafe void CopyComponentData(int attribIndex, byte* dataPtr, int stride)
+				{
+					ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
+					int buffStride = task.verticesStride;
+
+					long copyCount = GetTypeSize(vertAttrib.Type) * vertAttrib.Size;
+					long buffOffset = vertOffsetLocal;
+					int countToCopy = currentVertCount;
+
+					int blockIndex = this.currentVertBlock;
+					var currentDataBlock = task.verticesBlocks[blockIndex];
+					if(countToCopy > BLOCK_SIZE - vertOffsetLocal)
+					{
+						int copyLeft = BLOCK_SIZE - vertOffsetLocal;
+						countToCopy -= copyLeft;
+						fixed(byte* ptr = currentDataBlock)
+						{
+							var buffPtr = ptr + buffOffset + vertAttrib.Offset;
+							while(copyLeft > 0)
+							{
+								Buffer.MemoryCopy(dataPtr, buffPtr, copyCount, copyCount);
+								dataPtr += stride;
+								buffPtr += buffStride;
+								copyLeft--;
+							}
+							buffOffset = 0;
+						}
+
+						currentDataBlock = task.verticesBlocks[++blockIndex];
+						int count = countToCopy / BLOCK_SIZE;
+						while(count > 0)
+						{
+							copyLeft = BLOCK_SIZE;
+							fixed(byte* ptr = currentDataBlock)
+							{
+								var buffPtr = ptr + vertAttrib.Offset;
+								while(copyLeft > 0)
+								{
+									Buffer.MemoryCopy(dataPtr, buffPtr, copyCount, copyCount);
+									dataPtr += stride;
+									buffPtr += buffStride;
+									copyLeft--;
+								}
+							}
+
+							currentDataBlock = task.verticesBlocks[++blockIndex];
+							countToCopy -= BLOCK_SIZE;
+							count--;
+						}
+					}
+					if(countToCopy > 0)
+					{
+						fixed(byte* ptr = currentDataBlock)
+						{
+							var buffPtr = ptr + buffOffset + vertAttrib.Offset;
+							while(countToCopy > 0)
+							{
+								Buffer.MemoryCopy(dataPtr, buffPtr, copyCount, copyCount);
+								dataPtr += stride;
+								buffPtr += buffStride;
+								countToCopy--;
+							}
+						}
+					}
 				}
 
 				private unsafe void InsertIndices(int* indices, bool isDynamic)
 				{
 					if(isDynamic || indices == null) return;
 					hasIndices = true;
-					//TODO: insert indices
+					var dataPtr = indices;
+					int countToCopy = currentIndCount;
+					long buffOffset = indOffsetLocal;
+
+					long copyCount;
+					int blockIndex = this.currentIndBlock;
+					var currentDataBlock = task.indicesBlocks[blockIndex];
+					if(countToCopy > BLOCK_SIZE - indOffsetLocal)
+					{
+						int count = BLOCK_SIZE - indOffsetLocal;
+						copyCount = count * 4;
+						fixed(int* ptr = currentDataBlock)
+						{
+							Buffer.MemoryCopy(dataPtr, ptr + buffOffset, copyCount, copyCount);
+						}
+						countToCopy -= count;
+						dataPtr += count;
+						buffOffset = 0;
+
+						copyCount = BLOCK_SIZE * 4;
+						currentDataBlock = task.indicesBlocks[++blockIndex];
+						count = countToCopy / BLOCK_SIZE;
+						while(count > 0)
+						{
+							fixed(int* ptr = currentDataBlock)
+							{
+								Buffer.MemoryCopy(dataPtr, (byte*)ptr, copyCount, copyCount);
+							}
+
+							dataPtr += BLOCK_SIZE;
+							currentDataBlock = task.indicesBlocks[++blockIndex];
+							countToCopy -= BLOCK_SIZE;
+							count--;
+						}
+					}
+					if(countToCopy > 0)
+					{
+						copyCount = countToCopy * 4;
+						fixed(int* ptr = currentDataBlock)
+						{
+							Buffer.MemoryCopy(dataPtr, ptr + buffOffset, countToCopy, countToCopy);
+						}
+					}
 				}
 
 				private void EnsureCapacity()
@@ -568,11 +720,17 @@ namespace PowerOfMind.Systems.ChunkRender
 		private interface IBuilderStructContainer
 		{
 			VertexDeclaration GetVertexDeclaration();
+
+			int GetVertexStride();
+
+			void ProvideVertexData(DataProcessor processor);
 		}
 
+		private unsafe delegate void DataProcessor(byte* ptr);
+
 		private class BuilderStructContainer<TVertex, TUniform> : IBuilderStructContainer
-			where TVertex : struct, IVertexStruct
-			where TUniform : struct, IUniformsData
+			where TVertex : unmanaged, IVertexStruct
+			where TUniform : unmanaged, IUniformsData
 		{
 			private readonly TVertex vertexDefaults;
 			private readonly TUniform uniformDefaults;
@@ -585,7 +743,20 @@ namespace PowerOfMind.Systems.ChunkRender
 
 			VertexDeclaration IBuilderStructContainer.GetVertexDeclaration()
 			{
-				throw new NotImplementedException();
+				return vertexDefaults.GetDeclaration();
+			}
+
+			unsafe int IBuilderStructContainer.GetVertexStride()
+			{
+				return sizeof(TVertex);
+			}
+
+			unsafe void IBuilderStructContainer.ProvideVertexData(DataProcessor processor)
+			{
+				fixed(TVertex* ptr = &vertexDefaults)
+				{
+					processor((byte*)ptr);
+				}
 			}
 		}
 
