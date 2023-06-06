@@ -1,4 +1,7 @@
-﻿using PowerOfMind.Graphics.Shader;
+﻿using PowerOfMind.Collections;
+using PowerOfMind.Graphics.Shader;
+using System;
+using System.Collections.Generic;
 
 namespace PowerOfMind.Graphics
 {
@@ -43,7 +46,65 @@ namespace PowerOfMind.Graphics
 		/// </summary>
 		public static VertexDeclaration MapDeclaration(this IExtendedShaderProgram shader, VertexDeclaration declaration)
 		{
-			return default;
+			var attribs = new RefList<VertexAttribute>();
+			MapDeclaration(shader, declaration, attribs);
+			return new VertexDeclaration(attribs.ToArray());
+		}
+
+		/// <summary>
+		/// Creates a declaration that matches the shader, removing unsuitable attributes from the input declaration.
+		/// It will also assign such parameters as <see cref="VertexAttribute.Location"/> and <see cref="VertexAttribute.IntegerTarget"/>
+		/// </summary>
+		public static void MapDeclaration(this IExtendedShaderProgram shader, VertexDeclaration declaration, RefList<VertexAttribute> outAttributesList)
+		{
+			var inputs = shader.Inputs.Attributes;
+			int inputsCount = inputs.Length;
+			for(int i = declaration.Attributes.Length - 1; i >= 0; i--)
+			{
+				string name = declaration.Attributes[i].Name;
+				string alias = declaration.Attributes[i].Alias;
+				bool checkAlias = string.IsNullOrEmpty(alias);
+				for(int j = 0; j < inputsCount; j++)
+				{
+					if(checkAlias && inputs[j].Alias == alias || inputs[j].Name == name)
+					{
+						AddMappedAttribute(declaration.Attributes, i, inputs, j, outAttributesList);
+						break;
+					}
+				}
+			}
+		}
+
+		private static void AddMappedAttribute(VertexAttribute[] attributes, int attribIndex, ShaderVertexAttribute[] inputs, int inputIndex, RefList<VertexAttribute> outList)
+		{
+			ref readonly var attrib = ref attributes[attribIndex];
+			ref readonly var input = ref inputs[inputIndex];
+			if(attrib.Size > input.Size) throw new Exception("Attribute data size too big for the shader");
+			outList.Add(new VertexAttribute(
+				input.Name,
+				input.Alias ?? attrib.Alias,
+				input.Location,
+				attrib.Stride,
+				attrib.Offset,
+				attrib.InstanceDivisor,
+				attrib.Size,
+				attrib.Type,
+				attrib.Normalized,
+				IsInteger(input.Type)
+			));
+		}
+
+		private static bool IsInteger(EnumShaderPrimitiveType type)
+		{
+			switch(type)
+			{
+				case EnumShaderPrimitiveType.Half:
+				case EnumShaderPrimitiveType.Float:
+				case EnumShaderPrimitiveType.Double:
+					return false;
+				default:
+					return true;
+			}
 		}
 	}
 }

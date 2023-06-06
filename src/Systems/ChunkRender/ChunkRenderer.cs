@@ -7,10 +7,11 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public class ChunkRenderer : IRenderer//TODO: make settings property "maxConcurrentBuildTasks", by default - cpuCount/2, don't forget about try/catch
+	public class ChunkRenderer : IRenderer
 	{
 		double IRenderer.RenderOrder => 0.35;
 		int IRenderer.RenderRange => 0;
@@ -116,7 +117,10 @@ namespace PowerOfMind.Systems.ChunkRender
 			}
 			if(tmpTasksList.Count > 0)
 			{
-				//TODO: distribute tasks among threads & start
+				foreach(var task in tmpTasksList)
+				{
+					TyronThreadPool.QueueTask(task.Run);
+				}
 
 				tmpTasksList.Clear();
 			}
@@ -137,13 +141,16 @@ namespace PowerOfMind.Systems.ChunkRender
 					tmpIdsList.Add(id);
 				}
 			}
-			if(tmpIdsList.Count == 0)//nothing to skip, so just upload everything
+			if(!task.failed)
 			{
-				//TODO: upload data & update declaration if needed
-			}
-			else
-			{
-				//TODO: upload data, but skip tmpIdsList, and probably indices should be changed, i.e. add some offset
+				if(tmpIdsList.Count == 0)//nothing to skip, so just upload everything
+				{
+					//TODO: upload data & update declaration if needed
+				}
+				else
+				{
+					//TODO: upload data, but skip tmpIdsList, and probably indices should be changed, i.e. add some offset
+				}
 			}
 			if(task.version == chunkShaders[task.chunkShaderId].version && !rebuildStructs.Contains(task.chunkShaderId))
 			{
@@ -182,7 +189,7 @@ namespace PowerOfMind.Systems.ChunkRender
 				builders[id].usageCounter++;
 			}
 			while(builders.TryGetNextId(chunkShaderInfo.buildersChain, id, out id));
-			tmpTasksList.Add(new BuildTask(shaders[chunkShaders[chunkShaderId].shaderId].shader, tmpIdsList.ToArray(), 1, chunkShaderId));
+			tmpTasksList.Add(new BuildTask(this, shaders[chunkShaders[chunkShaderId].shaderId].shader, tmpIdsList.ToArray(), 1, chunkShaderId));
 		}
 
 		private EnumReduceUsageResult ReduceBuilderUsage(int id)
@@ -221,6 +228,25 @@ namespace PowerOfMind.Systems.ChunkRender
 				return EnumReduceUsageResult.RemovedBuilder;
 			}
 			return EnumReduceUsageResult.None;
+		}
+
+		private static int GetTypeSize(EnumShaderPrimitiveType type)
+		{
+			switch(type)
+			{
+				case EnumShaderPrimitiveType.UByte: return 1;
+				case EnumShaderPrimitiveType.SByte: return 1;
+				case EnumShaderPrimitiveType.UShort: return 2;
+				case EnumShaderPrimitiveType.Short: return 2;
+				case EnumShaderPrimitiveType.UInt: return 4;
+				case EnumShaderPrimitiveType.Int: return 4;
+				case EnumShaderPrimitiveType.Half: return 2;
+				case EnumShaderPrimitiveType.Float: return 4;
+				case EnumShaderPrimitiveType.Double: return 8;
+				case EnumShaderPrimitiveType.UInt2101010Rev: return 4;
+				case EnumShaderPrimitiveType.Int2101010Rev: return 4;
+				default: throw new Exception("Invalid attribute type: " + type);
+			}
 		}
 
 		private enum EnumReduceUsageResult
@@ -305,9 +331,13 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		private class BuildTask
 		{
+			public const int BLOCK_SIZE = 1024;
+
 			public readonly int[] builders;
 			public readonly int version;
 			public readonly int chunkShaderId;
+
+			public bool failed = false;
 
 			public int verticesCount;
 			public int indicesCount;
@@ -316,13 +346,16 @@ namespace PowerOfMind.Systems.ChunkRender
 			public List<byte[]> verticesBlocks;
 			public List<int[]> indicesBlocks;
 
-			public int[] builderVertOffsets;
-			public int[] builderIndOffsets;
+			public KeyValuePair<uint, uint>[][] builderVertexMaps;
+			public int[] builderVertexOffsets;
+			public int[] builderIndexOffsets;
 
 			private readonly IExtendedShaderProgram shader;
+			private readonly ChunkRenderer container;
 
-			public BuildTask(IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
+			public BuildTask(ChunkRenderer container, IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
 			{
+				this.container = container;
 				this.shader = shader;
 				this.builders = builders;
 				this.version = version;
@@ -331,12 +364,204 @@ namespace PowerOfMind.Systems.ChunkRender
 
 			public void Run()
 			{
-				builderVertOffsets = new int[builders.Length];
-				builderIndOffsets = new int[builders.Length];
+				builderVertexOffsets = new int[builders.Length];
+				builderIndexOffsets = new int[builders.Length];
 
-				//TODO: collect & merge declarations
-				//TODO: map declaration to shader & form vertex struct
-				//TODO: loop through builders & collect data, data should be splitted into the fixed blocks to reduce gc usage, block size is 1024*(VertexSize or IndexSize)
+				try
+				{
+					InitDeclaration();
+
+					var context = new BuilderContext(this, verticesStride);
+					for(int i = 0; i < builders.Length; i++)
+					{
+						builderVertexOffsets[i] = context.vertOffsetGlobal;
+						builderIndexOffsets[i] = context.indOffsetGlobal;
+
+						var builderStruct = container.builders[builders[i]].builderStruct;
+						var builder = container.builders[builders[i]].builder;
+
+						builder.Build(context);
+					}
+
+					context.EndBuild();
+
+					//TODO: group indices by uniforms, but since there is stream writing, uniforms should probably have some dictionary, and need a list where will be written uniform changes sequence(i.e. if uniform change detected, current offset & uniform index will be written)
+					//TODO: loop through builders & collect data, data should be splitted into the fixed blocks to reduce gc usage, block size is BLOCK_SIZE*(VertexSize or IndexSize)
+				}
+				catch(Exception e)
+				{
+					failed = true;
+					//TODO: log exception
+				}
+			}
+
+			private void InitDeclaration()
+			{
+				this.builderVertexMaps = new KeyValuePair<uint, uint>[builders.Length][];
+				var mappedDeclarations = new VertexDeclaration[builders.Length];
+				var attributes = new RefList<VertexAttribute>();
+				for(int i = 0; i < builders.Length; i++)
+				{
+					shader.MapDeclaration(container.builders[builders[i]].builderStruct.GetVertexDeclaration(), attributes);
+					mappedDeclarations[i] = new VertexDeclaration(attributes.ToArray());
+					attributes.Clear();
+				}
+
+				int vertStride = 0;
+				var tmpMap = new List<KeyValuePair<uint, uint>>();
+				var locationToAttrib = new Dictionary<int, int>();
+				for(int i = 0; i < mappedDeclarations.Length; i++)
+				{
+					var declaration = mappedDeclarations[i];
+					for(int j = 0; j < declaration.Attributes.Length; j++)
+					{
+						if(!locationToAttrib.TryGetValue(declaration.Attributes[j].Location, out var index))
+						{
+							index = attributes.Count;
+							AddAttrib(ref vertStride, declaration.Attributes, j, attributes);
+							locationToAttrib[declaration.Attributes[j].Location] = index;
+						}
+						else
+						{
+							if(declaration.Attributes[j].Size != attributes[index].Size || declaration.Attributes[j].Type != attributes[index].Type)
+							{
+								//TODO: log error
+								//logger.LogWarning("Vertex component {0} of builder {1} does not match size or type with other users of this shader. {2}({3}) was expected but {4}({5}) was provided.",
+								//	string.Format(string.IsNullOrEmpty(declaration.Attributes[j].Alias) ? "`{0}`" : "`{0}`[{1}]", declaration.Attributes[j].Name, declaration.Attributes[j].Alias),
+								//	builders[i], attributes[index].Type, attributes[index].Size, declaration.Attributes[j].Type, declaration.Attributes[j].Size);
+								continue;
+							}
+						}
+						tmpMap.Add(new KeyValuePair<uint, uint>(declaration.Attributes[j].Offset, attributes[index].Offset));
+					}
+
+					builderVertexMaps[i] = tmpMap.ToArray();
+					tmpMap.Clear();
+				}
+				for(int i = 0; i < attributes.Count; i++)
+				{
+					ref readonly var attrib = ref attributes[i];
+					attributes[i] = new VertexAttribute(
+						attrib.Name,
+						attrib.Alias,
+						attrib.Location,
+						(uint)vertStride,
+						attrib.Offset,
+						attrib.InstanceDivisor,
+						attrib.Size,
+						attrib.Type,
+						attrib.Normalized,
+						attrib.IntegerTarget
+					);
+				}
+
+				this.declaration = new VertexDeclaration(attributes.ToArray());
+				this.verticesStride = vertStride;
+			}
+
+			private static void AddAttrib(ref int byteOffset, VertexAttribute[] attributes, int attribIndex, RefList<VertexAttribute> outAttribs)
+			{
+				ref readonly var attrib = ref attributes[attribIndex];
+				outAttribs.Add(new VertexAttribute(
+					attrib.Name,
+					attrib.Alias,
+					attrib.Location,
+					0,
+					(uint)byteOffset,
+					0,
+					attrib.Size,
+					attrib.Type,
+					attrib.Normalized,
+					attrib.IntegerTarget
+				));
+				byteOffset += (int)attrib.Size * GetTypeSize(attrib.Type);
+			}
+
+			private class BuilderContext : IChunkBuilderContext, VerticesContext.IProcessor
+			{
+				public int vertOffsetGlobal = 0;
+				public int vertOffsetLocal = 0;
+				public int indOffsetGlobal = 0;
+				public int indOffsetLocal = 0;
+
+				private readonly BuildTask task;
+				private readonly int verticesStride;
+
+				private byte[] currentVertBlock;
+				private int[] currentIndBlock;
+
+				private int currentVertCount;
+				private int currentIndCount;
+
+				private bool hasIndices = false;
+				private IndicesContext.ProcessorDelegate addIndicesCallback;
+
+				public unsafe BuilderContext(BuildTask task, int verticesStride)
+				{
+					this.task = task;
+					this.verticesStride = verticesStride;
+					currentVertBlock = new byte[verticesStride * BLOCK_SIZE];
+					currentIndBlock = new int[BLOCK_SIZE];
+					addIndicesCallback = InsertIndices;
+				}
+
+				public void EndBuild()
+				{
+					task.verticesBlocks.Add(currentVertBlock);
+					task.indicesBlocks.Add(currentIndBlock);
+				}
+
+				void IChunkBuilderContext.AddData(IDrawableData data)
+				{
+					currentVertCount = data.VerticesCount;
+					currentIndCount = data.IndicesCount;
+					EnsureCapacity();
+					//Buffer.MemoryCopy();
+					//TODO: create verts remap & fill missing components by builder's defaults
+					hasIndices = false;
+					data.ProvideIndices(new IndicesContext(addIndicesCallback, false));
+					data.ProvideVertices(new VerticesContext(this, false));
+				}
+
+				unsafe void IChunkBuilderContext.AddData<T>(IDrawableData data, T* uniformsData)
+				{
+					throw new NotImplementedException();
+				}
+
+				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
+				{
+					if(isDynamic || (data == null && !hasIndices)) return;
+					//TODO: insert vertices
+				}
+
+				private unsafe void InsertIndices(int* indices, bool isDynamic)
+				{
+					if(isDynamic || indices == null) return;
+					hasIndices = true;
+					//TODO: insert indices
+				}
+
+				private void EnsureCapacity()
+				{
+					if(currentVertCount < BLOCK_SIZE - vertOffsetLocal)
+					{
+						int addBlocks = ((currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1) * BLOCK_SIZE;
+						while(addBlocks > 0)
+						{
+							task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
+							addBlocks--;
+						}
+					}
+					if(currentIndCount < BLOCK_SIZE - indOffsetLocal)
+					{
+						int addBlocks = ((currentIndCount - (BLOCK_SIZE - indOffsetLocal) - 1) / BLOCK_SIZE + 1) * BLOCK_SIZE;
+						while(addBlocks > 0)
+						{
+							task.indicesBlocks.Add(new int[BLOCK_SIZE]);
+							addBlocks--;
+						}
+					}
+				}
 			}
 		}
 

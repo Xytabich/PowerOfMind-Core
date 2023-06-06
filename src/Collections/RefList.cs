@@ -19,7 +19,7 @@ namespace PowerOfMind.Collections
 			size = 0;
 		}
 
-		public void Add(T value)
+		public void Add(in T value)
 		{
 			EnsureCapacity();
 			elements[size] = value;
@@ -62,6 +62,13 @@ namespace PowerOfMind.Collections
 			if(size == 0) return;
 			Array.Clear(elements, 0, size);
 			size = 0;
+		}
+
+		public T[] ToArray()
+		{
+			var arr = new T[size];
+			Array.Copy(elements, arr, size);
+			return arr;
 		}
 
 		private void EnsureCapacity(int count = 1)
