@@ -11,28 +11,47 @@ using Vintagestory.API.Common;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public class ChunkRenderer : IRenderer
+	public class ChunkRenderer : IRenderer//TODO: subscribe to shader reload event & rebuild all chunks
 	{
 		double IRenderer.RenderOrder => 0.35;
 		int IRenderer.RenderRange => 0;
 
-		private Dictionary<int3, int> chunkToId = new Dictionary<int3, int>();
-		private HeapCollection<ChunkInfo> chunks = new HeapCollection<ChunkInfo>();
-		private ChainList<ChunkShaderUsage> chunkShaders = new ChainList<ChunkShaderUsage>();
+		private readonly Dictionary<int3, int> chunkToId = new Dictionary<int3, int>();
+		private readonly HeapCollection<ChunkInfo> chunks = new HeapCollection<ChunkInfo>();
+		private readonly ChainList<ChunkShaderUsage> chunkShaders = new ChainList<ChunkShaderUsage>();
 
-		private Dictionary<IExtendedShaderProgram, int> shaderToId = new Dictionary<IExtendedShaderProgram, int>();
-		private HeapCollection<ShaderInfo> shaders = new HeapCollection<ShaderInfo>();
-		private ChainList<ShaderChunkUsage> shaderChunks = new ChainList<ShaderChunkUsage>();
+		private readonly Dictionary<IExtendedShaderProgram, int> shaderToId = new Dictionary<IExtendedShaderProgram, int>();
+		private readonly HeapCollection<ShaderInfo> shaders = new HeapCollection<ShaderInfo>();
+		private readonly ChainList<ShaderChunkUsage> shaderChunks = new ChainList<ShaderChunkUsage>();
 
-		private ChainList<BuilderInfo> builders = new ChainList<BuilderInfo>();
+		private readonly ChainList<BuilderInfo> builders = new ChainList<BuilderInfo>();
 
-		private Queue<int> removeBuilderQueue = new Queue<int>();
-		private ConcurrentBag<BuildTask> completedTasks = new ConcurrentBag<BuildTask>();
+		private readonly Queue<int> removeBuilderQueue = new Queue<int>();
+		private readonly ConcurrentBag<BuildTask> completedTasks = new ConcurrentBag<BuildTask>();
 
-		private HashSet<int> rebuildStructs = new HashSet<int>();
+		private readonly HashSet<int> rebuildStructs = new HashSet<int>();
 
-		private List<BuildTask> tmpTasksList = new List<BuildTask>();
-		private List<int> tmpIdsList = new List<int>();
+		private readonly List<BuildTask> tmpTasksList = new List<BuildTask>();
+		private readonly List<int> tmpIdsList = new List<int>();
+		private readonly Dictionary<int, int> tmpPairs = new Dictionary<int, int>();
+		private readonly ChunkDrawableData chunkDataHelper = new ChunkDrawableData();
+
+		private readonly UniformsDeclaration uniformsDeclaration = new UniformsDeclaration(
+			new UniformProperty("projectionMatrix", UniformAlias.PROJ_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
+			new UniformProperty("modelViewMatrix", UniformAlias.MV_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
+			new UniformProperty("viewMatrix", UniformAlias.VIEW_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
+			new UniformProperty("modelMatrix", UniformAlias.MODEL_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
+			new UniformProperty("origin", UniformAlias.MODEL_ORIGIN, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Vector, 3),
+
+			new UniformProperty("rgbaFogIn", UniformAlias.FOG_COLOR, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Vector, 4),
+			new UniformProperty("rgbaAmbientIn", UniformAlias.AMBIENT_COLOR, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Vector, 3),
+			new UniformProperty("fogDensityIn", UniformAlias.FOG_DENSITY, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Primitive, 1),
+			new UniformProperty("fogMinIn", UniformAlias.FOG_MIN, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Primitive, 1),
+			new UniformProperty("alphaTest", UniformAlias.ALPHA_TEST, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Primitive, 1)
+		);
+
+		private readonly IRenderAPI rapi;
+		private readonly ICoreClientAPI capi;
 
 		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IChunkBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
 			where TVertex : unmanaged, IVertexStruct
@@ -45,8 +64,7 @@ namespace PowerOfMind.Systems.ChunkRender
 			}
 			if(!shaderToId.TryGetValue(shader, out int sid))
 			{
-				sid = shaders.Add(new ShaderInfo(shader));
-				shaderToId[shader] = sid;
+				sid = AddShader(shader);
 			}
 
 			ref var chunkRef = ref chunks[cid];
@@ -92,12 +110,116 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		void IRenderer.OnRenderFrame(float deltaTime, EnumRenderStage stage)
 		{
-			throw new NotImplementedException();
+			switch(stage)
+			{
+				case EnumRenderStage.Before:
+					Update();
+					break;
+				case EnumRenderStage.Opaque:
+					if(shaders.Count > 0) RenderStage(stage);
+					break;
+			}
 		}
 
 		void IDisposable.Dispose()
 		{
 			throw new NotImplementedException();
+		}
+
+		private int AddShader(IExtendedShaderProgram shader)
+		{
+			tmpPairs.Clear();
+			shader.MapDeclarationByIdentifier(uniformsDeclaration, tmpPairs);
+
+			if(tmpPairs.TryGetValue(0, out var projMatrix))
+			{
+				int viewMatrix = -1;
+				if(!tmpPairs.TryGetValue(1, out var mvMatrix))
+				{
+					mvMatrix = -1;
+					if(!tmpPairs.TryGetValue(2, out viewMatrix))
+					{
+						goto _fail;
+					}
+				}
+				if(!tmpPairs.TryGetValue(3, out var modelMatrix))
+				{
+					modelMatrix = -1;
+				}
+				if(!tmpPairs.TryGetValue(4, out var originPos))
+				{
+					originPos = -1;
+				}
+				if(mvMatrix < 0 && (modelMatrix < 0 || originPos < 0))
+				{
+					goto _fail;
+				}
+
+				int id = shaders.Add(new ShaderInfo(shader, projMatrix, viewMatrix, modelMatrix, mvMatrix, originPos,
+					tmpPairs.TryGetValue(5, out var fogColor) ? fogColor : -1,
+					tmpPairs.TryGetValue(6, out var ambientColor) ? ambientColor : -1,
+					tmpPairs.TryGetValue(7, out var fogDensity) ? fogDensity : -1,
+					tmpPairs.TryGetValue(8, out var fogMin) ? fogMin : -1,
+					tmpPairs.TryGetValue(9, out var alphaTest) ? alphaTest : -1
+				));
+				shaderToId[shader] = id;
+				return id;
+			}
+
+_fail:
+			throw new Exception("Invalid shader, shader must contain projection and view matrices as well as model matrix or origin position.");
+		}
+
+		private void RenderStage(EnumRenderStage stage)
+		{
+			foreach(var pair in shaderToId)
+			{
+				ref readonly var shader = ref shaders[pair.Value];
+				if(shader.shaderChunksChain >= 0)
+				{
+					var prog = shader.shader;
+					var uniforms = prog.Uniforms.Properties;
+					prog.Use();
+
+					if(shader.ambientColor >= 0) uniforms[shader.ambientColor].SetValue(rapi.AmbientColor);
+					if(shader.fogColor >= 0) uniforms[shader.fogColor].SetValue(rapi.FogColor);
+					if(shader.fogDensity >= 0) uniforms[shader.fogDensity].SetValue(rapi.FogDensity);
+					if(shader.fogMin >= 0) uniforms[shader.fogMin].SetValue(rapi.FogMin);
+					if(shader.alphaTest >= 0) uniforms[shader.alphaTest].SetValue(0.001f);
+
+					uniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
+					if(shader.mvMatrix >= 0) uniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
+					if(shader.viewMatrix >= 0) uniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
+					var playerCamPos = capi.World.Player.Entity.CameraPos;
+					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
+					{
+						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
+						if(info.drawableHandle != null)
+						{
+							var chunkIndex = chunks[chunk.chunkId].position;
+
+							if(shader.originPos >= 0)
+							{
+								if(shader.modelMatrix >= 0)
+								{
+									uniforms[shader.modelMatrix].SetValue(float4x4.identity);
+								}
+
+								uniforms[shader.originPos].SetValue(
+									new float3((float)(chunkIndex.x - playerCamPos.X), (float)(chunkIndex.y - playerCamPos.Y), (float)(chunkIndex.z - playerCamPos.Z)));
+							}
+							else
+							{
+								uniforms[shader.modelMatrix].SetValue(float4x4.Translate(
+									new float3((float)(chunkIndex.x - playerCamPos.X), (float)(chunkIndex.y - playerCamPos.Y), (float)(chunkIndex.z - playerCamPos.Z))));
+							}
+
+							rapi.RenderDrawable(info.drawableHandle);
+						}
+					}
+					prog.Stop();
+				}
+			}
 		}
 
 		private void Update()
@@ -143,14 +265,72 @@ namespace PowerOfMind.Systems.ChunkRender
 			}
 			if(!task.failed)
 			{
+				ref var chunkShader = ref chunkShaders[task.chunkShaderId];
+				chunkDataHelper.Clear();
+				chunkDataHelper.verticesStride = task.verticesStride;
+				chunkDataHelper.verticesCount = task.verticesCount;
+				chunkDataHelper.indicesCount = task.indicesCount;
+				chunkDataHelper.vertexDeclaration = task.declaration;
 				if(tmpIdsList.Count == 0)//nothing to skip, so just upload everything
 				{
-					//TODO: upload data & update declaration if needed
+					if(task.verticesBlocks.Count == 1 && task.indicesBlocks.Count == 1)
+					{
+						chunkDataHelper.verticesData = task.verticesBlocks[0];
+						chunkDataHelper.indicesData = task.indicesBlocks[0];
+						if(chunkShader.drawableHandle == null)
+						{
+							chunkShader.drawableHandle = rapi.UploadDrawable(chunkDataHelper);
+						}
+						else
+						{
+							rapi.ReuploadDrawable(chunkShader.drawableHandle, chunkDataHelper, true);
+						}
+					}
+					else
+					{
+						//First allocate the required size (i.e. a null pointer will just allocate the buffer and won't upload any data)
+						if(chunkShader.drawableHandle == null)
+						{
+							chunkShader.drawableHandle = rapi.UploadDrawable(chunkDataHelper);
+						}
+						else
+						{
+							rapi.ReuploadDrawable(chunkShader.drawableHandle, chunkDataHelper, true);
+						}
+
+						//Then uploading data block-by-block
+						int lastIndex = task.verticesBlocks.Count - 1;
+						chunkDataHelper.verticesCount = BuildTask.BLOCK_SIZE;
+						chunkDataHelper.indicesCount = 0;//Uploading only vertices
+						for(int i = 0; i <= lastIndex; i++)
+						{
+							if(i == lastIndex)
+							{
+								chunkDataHelper.verticesCount = task.verticesCount % BuildTask.BLOCK_SIZE;
+							}
+							chunkDataHelper.verticesData = task.verticesBlocks[i];
+							rapi.UpdateDrawable(chunkShader.drawableHandle, chunkDataHelper);
+						}
+
+						lastIndex = task.indicesBlocks.Count - 1;
+						chunkDataHelper.verticesCount = 0;//Uploading only indices
+						chunkDataHelper.indicesCount = BuildTask.BLOCK_SIZE;
+						for(int i = 0; i <= lastIndex; i++)
+						{
+							if(i == lastIndex)
+							{
+								chunkDataHelper.indicesCount = task.indicesCount % BuildTask.BLOCK_SIZE;
+							}
+							chunkDataHelper.indicesData = task.indicesBlocks[i];
+							rapi.UpdateDrawable(chunkShader.drawableHandle, chunkDataHelper);
+						}
+					}
 				}
 				else
 				{
 					//TODO: upload data, but skip tmpIdsList, and probably indices should be changed, i.e. add some offset
 				}
+				chunkDataHelper.Clear();
 			}
 			if(task.version == chunkShaders[task.chunkShaderId].version && !rebuildStructs.Contains(task.chunkShaderId))
 			{
@@ -203,9 +383,8 @@ namespace PowerOfMind.Systems.ChunkRender
 				chunkShaders[chunkShaderId].buildersChain = builders.Remove(chunkShaders[chunkShaderId].buildersChain, id);
 				if(chunkShaders[chunkShaderId].buildersChain < 0)
 				{
-					//TODO: remove & dispose handles & mesh data
-
 					rebuildStructs.Remove(chunkShaderId);//since it's removed, there's nothing to update
+					chunkShaders[chunkShaderId].drawableHandle?.Dispose();
 
 					int shaderId = chunkShaders[chunkShaderId].shaderId;
 					int shaderChunkId = chunkShaders[chunkShaderId].shaderChunkId;
@@ -259,12 +438,34 @@ namespace PowerOfMind.Systems.ChunkRender
 		private struct ShaderInfo
 		{
 			public readonly IExtendedShaderProgram shader;
+			public readonly int projMatrix;
+			public readonly int viewMatrix;
+			public readonly int modelMatrix;
+			public readonly int mvMatrix;
+			public readonly int originPos;
+
+			public readonly int fogColor;
+			public readonly int ambientColor;
+			public readonly int fogDensity;
+			public readonly int fogMin;
+			public readonly int alphaTest;
 
 			public int shaderChunksChain;
 
-			public ShaderInfo(IExtendedShaderProgram shader)
+			public ShaderInfo(IExtendedShaderProgram shader, int projMatrix, int viewMatrix, int modelMatrix, int mvMatrix, int originPos,
+				int fogColor, int ambientColor, int fogDensity, int fogMin, int alphaTest)
 			{
 				this.shader = shader;
+				this.projMatrix = projMatrix;
+				this.viewMatrix = viewMatrix;
+				this.modelMatrix = modelMatrix;
+				this.mvMatrix = mvMatrix;
+				this.originPos = originPos;
+				this.fogColor = fogColor;
+				this.ambientColor = ambientColor;
+				this.fogDensity = fogDensity;
+				this.fogMin = fogMin;
+				this.alphaTest = alphaTest;
 				this.shaderChunksChain = -1;
 			}
 		}
@@ -308,12 +509,15 @@ namespace PowerOfMind.Systems.ChunkRender
 			public int buildersChain;
 			public int version;
 
+			public IDrawableHandle drawableHandle;
+
 			public ChunkShaderUsage(int shaderId, int shaderChunkId)
 			{
 				this.shaderId = shaderId;
 				this.shaderChunkId = shaderChunkId;
 				this.buildersChain = -1;
 				this.version = 0;
+				this.drawableHandle = null;
 			}
 		}
 
@@ -343,8 +547,8 @@ namespace PowerOfMind.Systems.ChunkRender
 			public int indicesCount;
 			public int verticesStride;
 			public VertexDeclaration declaration;
-			public List<byte[]> verticesBlocks;
-			public List<int[]> indicesBlocks;
+			public readonly List<byte[]> verticesBlocks = new List<byte[]>();
+			public readonly List<int[]> indicesBlocks = new List<int[]>();
 
 			public KeyValuePair<int, int>[][] builderVertexMaps;
 			public VertexDeclaration[] builderDeclarations;
@@ -377,8 +581,8 @@ namespace PowerOfMind.Systems.ChunkRender
 					{
 						context.builderIndex = i;
 
-						builderVertexOffsets[i] = context.vertOffsetGlobal;
-						builderIndexOffsets[i] = context.indOffsetGlobal;
+						builderVertexOffsets[i] = verticesCount;
+						builderIndexOffsets[i] = indicesCount;
 
 						var builderStruct = container.builders[builders[i]].builderStruct;
 						var builder = container.builders[builders[i]].builder;
@@ -387,7 +591,6 @@ namespace PowerOfMind.Systems.ChunkRender
 					}
 
 					//TODO: group indices by uniforms, but since there is stream writing, uniforms should probably have some dictionary, and need a list where will be written uniform changes sequence(i.e. if uniform change detected, current offset & uniform index will be written)
-					//TODO: loop through builders & collect data, data should be splitted into the fixed blocks to reduce gc usage, block size is BLOCK_SIZE*(VertexSize or IndexSize)
 				}
 				catch(Exception e)
 				{
@@ -480,9 +683,7 @@ namespace PowerOfMind.Systems.ChunkRender
 
 			private class BuilderContext : IChunkBuilderContext, VerticesContext.IProcessor
 			{
-				public int vertOffsetGlobal = 0;
 				public int vertOffsetLocal = 0;
-				public int indOffsetGlobal = 0;
 				public int indOffsetLocal = 0;
 
 				public int builderIndex = 0;
@@ -543,8 +744,8 @@ namespace PowerOfMind.Systems.ChunkRender
 							});
 						}
 
-						vertOffsetGlobal += currentVertCount;
-						indOffsetGlobal += currentIndCount;
+						task.verticesCount += currentVertCount;
+						task.indicesCount += currentIndCount;
 						currentVertBlock += (vertOffsetLocal + currentVertCount) / BLOCK_SIZE;
 						currentIndBlock += (indOffsetLocal + currentIndCount) / BLOCK_SIZE;
 						vertOffsetLocal = (vertOffsetLocal + currentVertCount) % BLOCK_SIZE;
@@ -557,11 +758,11 @@ namespace PowerOfMind.Systems.ChunkRender
 					throw new NotImplementedException();
 				}
 
-				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
+				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 				{
 					if(isDynamic || (data == null && !hasIndices)) return;
 					tmpAttributes.Clear();
-					task.shader.MapDeclaration(data[0].GetDeclaration(), tmpAttributes);
+					task.shader.MapDeclaration(declaration, tmpAttributes);
 					for(int i = 0; i < tmpAttributes.Count; i++)
 					{
 						if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
@@ -756,6 +957,56 @@ namespace PowerOfMind.Systems.ChunkRender
 				fixed(TVertex* ptr = &vertexDefaults)
 				{
 					processor((byte*)ptr);
+				}
+			}
+		}
+
+		private class ChunkDrawableData : IDrawableData
+		{
+			EnumDrawMode IDrawableData.DrawMode => EnumDrawMode.Triangles;
+			int IDrawableData.IndicesCount => indicesCount;
+			int IDrawableData.VerticesCount => verticesCount;
+			int IDrawableData.VertexBuffersCount => 1;
+
+			public int indicesCount, verticesCount, verticesStride;
+			public VertexDeclaration vertexDeclaration;
+
+			public byte[] verticesData;
+			public int[] indicesData;
+
+			public void Clear()
+			{
+				verticesData = null;
+				indicesData = null;
+			}
+
+			unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+			{
+				if(!context.ProvideDynamicOnly)
+				{
+					if(indicesData == null) context.Process(null, false);
+					else
+					{
+						fixed(int* ptr = indicesData)
+						{
+							context.Process(ptr, false);
+						}
+					}
+				}
+			}
+
+			unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+			{
+				if(!context.ProvideDynamicOnly)
+				{
+					if(verticesData == null) context.Process(0, (byte*)null, vertexDeclaration, verticesStride, false);
+					else
+					{
+						fixed(byte* ptr = verticesData)
+						{
+							context.Process(0, ptr, vertexDeclaration, verticesStride, false);
+						}
+					}
 				}
 			}
 		}

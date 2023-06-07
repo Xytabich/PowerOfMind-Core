@@ -40,6 +40,26 @@ namespace PowerOfMind.Graphics
 			shader.BindTexture(shader.FindUniformIndex(samplerName), target, textureId, textureNumber);
 		}
 
+		public static void MapDeclarationByIdentifier(this IExtendedShaderProgram shader, UniformsDeclaration declaration, IDictionary<int, int> outMap)
+		{
+			var uniforms = shader.Uniforms.Properties;
+			int uniformsCount = uniforms.Length;
+			for(int i = declaration.Properties.Length - 1; i >= 0; i--)
+			{
+				string name = declaration.Properties[i].Name;
+				string alias = declaration.Properties[i].Alias;
+				bool checkAlias = string.IsNullOrEmpty(alias);
+				for(int j = 0; j < uniformsCount; j++)
+				{
+					if(checkAlias && uniforms[j].Alias == alias || uniforms[j].Name == name)
+					{
+						outMap[i] = j;
+						break;
+					}
+				}
+			}
+		}
+
 		/// <summary>
 		/// Creates a declaration that matches the shader, removing unsuitable attributes from the input declaration.
 		/// It will also assign such parameters as <see cref="VertexAttribute.Location"/> and <see cref="VertexAttribute.IntegerTarget"/>

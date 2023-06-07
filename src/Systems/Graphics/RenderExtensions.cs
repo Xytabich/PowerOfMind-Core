@@ -234,11 +234,11 @@ namespace PowerOfMind.Graphics
 				this.attribPointers = attribPointers;
 			}
 
-			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
-				var attributes = data[0].GetDeclaration().Attributes;
+				var attributes = declaration.Attributes;
 				for(int i = attributes.Length - 1; i >= 0; i--)
 				{
 					ref readonly var attrib = ref attributes[i];
@@ -283,7 +283,7 @@ namespace PowerOfMind.Graphics
 				this.verticesCount = verticesCount;
 			}
 
-			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
@@ -301,7 +301,7 @@ namespace PowerOfMind.Graphics
 				this.verticesCount = verticesCount;
 			}
 
-			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 			{
 				if(data == null) return;
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
@@ -322,7 +322,7 @@ namespace PowerOfMind.Graphics
 				this.offsets = offsets;
 			}
 
-			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, int stride, bool isDynamic)
+			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 			{
 				if(data == null) return;
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);

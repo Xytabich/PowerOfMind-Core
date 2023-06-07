@@ -112,9 +112,11 @@
     <Compile Include="src\Systems\Graphics\Shader\ShaderUniformExtensions.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderVertexAttribute.cs" />
     <Compile Include="src\Systems\Graphics\Shader\StandardIncludeBindings.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\UniformProperty.cs" />
     <Compile Include="src\Systems\Graphics\Shader\UniformPropertyHandle.cs" />
     <Compile Include="src\Systems\Graphics\Shader\ShaderUniformDeclaration.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\VertexDeclarationUtil.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\UniformsDeclaration.cs" />
     <Compile Include="src\Systems\Multiblock\BlockMultiblockMain.cs" />
     <Compile Include="src\Systems\Multiblock\BlockMultiblockSurrogate.cs" />
     <Compile Include="src\Systems\Multiblock\IMultiblockMainBlock.cs" />

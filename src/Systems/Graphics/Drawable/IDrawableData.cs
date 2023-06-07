@@ -64,9 +64,9 @@ namespace PowerOfMind.Graphics.Drawable
 		/// </summary>
 		/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process<T>(int bufferIndex, T* data, int stride, bool isDynamic) where T : unmanaged, IVertexStruct
+		public unsafe void Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic) where T : unmanaged
 		{
-			processor.Process(bufferIndex, data, stride, isDynamic);
+			processor.Process(bufferIndex, data, declaration, stride, isDynamic);
 		}
 
 		public interface IProcessor
@@ -75,7 +75,7 @@ namespace PowerOfMind.Graphics.Drawable
 			/// Provide data to the processor
 			/// </summary>
 			/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
-			unsafe void Process<T>(int bufferIndex, T* data, int stride, bool isDynamic) where T : unmanaged, IVertexStruct;
+			unsafe void Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic) where T : unmanaged;
 		}
 	}
 }
