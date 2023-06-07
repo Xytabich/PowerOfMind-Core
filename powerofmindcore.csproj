@@ -90,6 +90,7 @@
     <Compile Include="src\Collections\RefList.cs" />
     <Compile Include="src\PowerOfMindCore.cs" />
     <Compile Include="src\Systems\ChunkRender\ChunkRenderer.cs" />
+    <Compile Include="src\Systems\ChunkRender\ChunkRenderSystem.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\IDrawableData.cs" />
     <Compile Include="src\Systems\Graphics\Shader\IUniformsData.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.cs" />

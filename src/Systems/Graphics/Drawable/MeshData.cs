@@ -41,19 +41,36 @@ namespace PowerOfMind.Graphics
 			VertexDeclaration = vertices[0].GetDeclaration();
 		}
 
+		public MeshData(T[] vertices, int[] indices, VertexDeclaration vertexDeclaration)
+		{
+			Vertices = vertices;
+			VerticesCount = vertices.Length;
+
+			Indices = indices;
+			IndicesCount = indices.Length;
+
+			VertexDeclaration = vertexDeclaration;
+		}
+
 		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
 		{
-			fixed(int* ptr = Indices)
+			if(!context.ProvideDynamicOnly || !IndicesStatic)
 			{
-				context.Process(ptr + IndicesOffset, !IndicesStatic);
+				fixed(int* ptr = Indices)
+				{
+					context.Process(ptr + IndicesOffset, !IndicesStatic);
+				}
 			}
 		}
 
 		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
 		{
-			fixed(T* ptr = Vertices)
+			if(!context.ProvideDynamicOnly || !VerticesStatic)
 			{
-				context.Process(0, ptr + VerticesOffset, sizeof(T), VertexDeclaration, !VerticesStatic);
+				fixed(T* ptr = Vertices)
+				{
+					context.Process(0, ptr + VerticesOffset, VertexDeclaration, sizeof(T), !VerticesStatic);
+				}
 			}
 		}
 	}
@@ -100,17 +117,27 @@ namespace PowerOfMind.Graphics
 
 		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
 		{
-			fixed(int* ptr = Indices)
+			if(!context.ProvideDynamicOnly || !IndicesStatic)
 			{
-				context.Process(ptr + IndicesOffset, !IndicesStatic);
+				fixed(int* ptr = Indices)
+				{
+					context.Process(ptr + IndicesOffset, !IndicesStatic);
+				}
 			}
 		}
 
 		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
 		{
-			fixed(T* ptr = Vertices)
+			if(!context.ProvideDynamicOnly)
 			{
-				context.Process(0, ptr + VerticesOffset, sizeof(T), VertexDeclaration, !VerticesStatic);
+				fixed(TStatic* ptr = StaticVertices)
+				{
+					context.Process(0, ptr + VerticesOffset, StaticVertices[0].GetDeclaration(), sizeof(TStatic), false);
+				}
+			}
+			fixed(TDynamic* ptr = DynamicVertices)
+			{
+				context.Process(0, ptr + VerticesOffset, DynamicVertices[0].GetDeclaration(), sizeof(TDynamic), true);
 			}
 		}
 	}

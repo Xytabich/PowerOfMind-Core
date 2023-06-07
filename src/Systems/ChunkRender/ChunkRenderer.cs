@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
@@ -53,13 +54,22 @@ namespace PowerOfMind.Systems.ChunkRender
 		private readonly IRenderAPI rapi;
 		private readonly ICoreClientAPI capi;
 
+		public ChunkRenderer(ICoreClientAPI capi)
+		{
+			this.capi = capi;
+			this.rapi = capi.Render;
+
+			capi.Event.RegisterRenderer(this, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
+			capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "powerofmindcore:chunkrenderer");
+		}
+
 		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IChunkBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
 			where TVertex : unmanaged, IVertexStruct
 			where TUniform : unmanaged, IUniformsData
 		{
 			if(!chunkToId.TryGetValue(chunk, out int cid))
 			{
-				cid = chunks.Add(new ChunkInfo(chunk));
+				cid = chunks.Add(new ChunkInfo(chunk, chunk * capi.World.BlockAccessor.ChunkSize));
 				chunkToId[chunk] = cid;
 			}
 			if(!shaderToId.TryGetValue(shader, out int sid))
@@ -103,6 +113,11 @@ namespace PowerOfMind.Systems.ChunkRender
 			return id;
 		}
 
+		public void MarkBuilderDirty(int id)
+		{
+			rebuildStructs.Add(builders[id].chunkShaderId);
+		}
+
 		public void RemoveBuilder(int id)
 		{
 			removeBuilderQueue.Enqueue(id);
@@ -123,7 +138,19 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		void IDisposable.Dispose()
 		{
-			throw new NotImplementedException();
+			capi.Event.UnregisterRenderer(this, EnumRenderStage.Before);
+			capi.Event.UnregisterRenderer(this, EnumRenderStage.Opaque);
+			foreach(var pair in shaderToId)
+			{
+				ref readonly var shader = ref shaders[pair.Value];
+				if(shader.shaderChunksChain >= 0)
+				{
+					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
+					{
+						chunkShaders[chunk.chunkShaderId].drawableHandle?.Dispose();
+					}
+				}
+			}
 		}
 
 		private int AddShader(IExtendedShaderProgram shader)
@@ -150,7 +177,7 @@ namespace PowerOfMind.Systems.ChunkRender
 				{
 					originPos = -1;
 				}
-				if(mvMatrix < 0 && (modelMatrix < 0 || originPos < 0))
+				if(mvMatrix < 0 && modelMatrix < 0 && originPos < 0)
 				{
 					goto _fail;
 				}
@@ -172,6 +199,13 @@ _fail:
 
 		private void RenderStage(EnumRenderStage stage)
 		{
+			rapi.GLDepthMask(true);
+			rapi.GLEnableDepthTest();
+			rapi.GlToggleBlend(true);
+			rapi.GlDisableCullFace();
+			rapi.GlMatrixModeModelView();
+			rapi.GlPushMatrix();
+			rapi.GlLoadMatrix(rapi.CameraMatrixOrigin);
 			foreach(var pair in shaderToId)
 			{
 				ref readonly var shader = ref shaders[pair.Value];
@@ -190,13 +224,14 @@ _fail:
 					uniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
 					if(shader.mvMatrix >= 0) uniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
 					if(shader.viewMatrix >= 0) uniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
+
 					var playerCamPos = capi.World.Player.Entity.CameraPos;
 					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
 					{
 						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
 						if(info.drawableHandle != null)
 						{
-							var chunkIndex = chunks[chunk.chunkId].position;
+							var origin = chunks[chunk.chunkId].origin;
 
 							if(shader.originPos >= 0)
 							{
@@ -206,13 +241,19 @@ _fail:
 								}
 
 								uniforms[shader.originPos].SetValue(
-									new float3((float)(chunkIndex.x - playerCamPos.X), (float)(chunkIndex.y - playerCamPos.Y), (float)(chunkIndex.z - playerCamPos.Z)));
+									new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z)));
 							}
 							else
 							{
-								uniforms[shader.modelMatrix].SetValue(float4x4.Translate(
-									new float3((float)(chunkIndex.x - playerCamPos.X), (float)(chunkIndex.y - playerCamPos.Y), (float)(chunkIndex.z - playerCamPos.Z))));
+								var mat = new float[16];
+								Mat4f.Identity(mat);
+								Mat4f.Translate(mat, mat, (float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z));
+								uniforms[shader.modelMatrix].SetValue(mat);
 							}
+
+							uniforms[prog.FindUniformIndex("rgbaLightIn")].SetValue(new float4(1, 1, 1, 1));
+							uniforms[prog.FindUniformIndex("rgbaTint")].SetValue(new float4(1, 1, 1, 1));
+							prog.BindTexture2D("tex", capi.BlockTextureAtlas.UnknownTexturePosition.atlasTextureId);
 
 							rapi.RenderDrawable(info.drawableHandle);
 						}
@@ -220,6 +261,7 @@ _fail:
 					prog.Stop();
 				}
 			}
+			rapi.GlPopMatrix();
 		}
 
 		private void Update()
@@ -392,7 +434,7 @@ _fail:
 					chunks[chunkId].chunkShadersChain = chunkShaders.Remove(chunks[chunkId].chunkShadersChain, chunkShaderId);
 					if(chunks[chunkId].chunkShadersChain < 0)
 					{
-						chunkToId.Remove(chunks[chunkId].position);
+						chunkToId.Remove(chunks[chunkId].index);
 						chunks.Remove(chunkId);
 					}
 
@@ -491,13 +533,15 @@ _fail:
 
 		private struct ChunkInfo
 		{
-			public readonly int3 position;
+			public readonly int3 index;
+			public readonly int3 origin;
 
 			public int chunkShadersChain;
 
-			public ChunkInfo(int3 position)
+			public ChunkInfo(int3 index, int3 origin)
 			{
-				this.position = position;
+				this.index = index;
+				this.origin = origin;
 				this.chunkShadersChain = -1;
 			}
 		}
@@ -597,6 +641,8 @@ _fail:
 					failed = true;
 					//TODO: log exception
 				}
+
+				container.completedTasks.Add(this);
 			}
 
 			private void InitDeclaration()
@@ -889,25 +935,25 @@ _fail:
 						copyCount = countToCopy * 4;
 						fixed(int* ptr = currentDataBlock)
 						{
-							Buffer.MemoryCopy(dataPtr, ptr + buffOffset, countToCopy, countToCopy);
+							Buffer.MemoryCopy(dataPtr, ptr + buffOffset, copyCount, copyCount);
 						}
 					}
 				}
 
 				private void EnsureCapacity()
 				{
-					if(currentVertCount < BLOCK_SIZE - vertOffsetLocal)
+					if(currentVertCount > BLOCK_SIZE - vertOffsetLocal)
 					{
-						int addBlocks = ((currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1) * BLOCK_SIZE;
+						int addBlocks = (currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1;
 						while(addBlocks > 0)
 						{
 							task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
 							addBlocks--;
 						}
 					}
-					if(currentIndCount < BLOCK_SIZE - indOffsetLocal)
+					if(currentIndCount > BLOCK_SIZE - indOffsetLocal)
 					{
-						int addBlocks = ((currentIndCount - (BLOCK_SIZE - indOffsetLocal) - 1) / BLOCK_SIZE + 1) * BLOCK_SIZE;
+						int addBlocks = (currentIndCount - (BLOCK_SIZE - indOffsetLocal) - 1) / BLOCK_SIZE + 1;
 						while(addBlocks > 0)
 						{
 							task.indicesBlocks.Add(new int[BLOCK_SIZE]);
@@ -1010,27 +1056,27 @@ _fail:
 				}
 			}
 		}
+	}
 
-		public interface IChunkBuilder
-		{
-			/// <summary>
-			/// Builds the drawable data for the chunk. Called on a separate thread.
-			/// </summary>
-			void Build(IChunkBuilderContext context);
-		}
+	public interface IChunkBuilder
+	{
+		/// <summary>
+		/// Builds the drawable data for the chunk. Called on a separate thread.
+		/// </summary>
+		void Build(IChunkBuilderContext context);
+	}
 
-		public interface IChunkBuilderContext//TODO: allow only triangles(drawable type)
-		{
-			/// <summary>
-			/// Adds drawable data to the chunk, only static data will be added, dynamic data will be ignored
-			/// </summary>
-			/// <param name="uniformsData">Additional data by which rendering will be grouped. For example MAIN_TEXTURE.</param>
-			unsafe void AddData<T>(IDrawableData data, T* uniformsData) where T : unmanaged, IUniformsData;
+	public interface IChunkBuilderContext//TODO: allow only triangles(drawable type)
+	{
+		/// <summary>
+		/// Adds drawable data to the chunk, only static data will be added, dynamic data will be ignored
+		/// </summary>
+		/// <param name="uniformsData">Additional data by which rendering will be grouped. For example MAIN_TEXTURE.</param>
+		unsafe void AddData<T>(IDrawableData data, T* uniformsData) where T : unmanaged, IUniformsData;
 
-			/// <summary>
-			/// Adds drawable data to the chunk, only static data will be added, dynamic data will be ignored
-			/// </summary>
-			void AddData(IDrawableData data);
-		}
+		/// <summary>
+		/// Adds drawable data to the chunk, only static data will be added, dynamic data will be ignored
+		/// </summary>
+		void AddData(IDrawableData data);
 	}
 }

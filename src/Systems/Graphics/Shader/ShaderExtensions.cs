@@ -48,7 +48,7 @@ namespace PowerOfMind.Graphics
 			{
 				string name = declaration.Properties[i].Name;
 				string alias = declaration.Properties[i].Alias;
-				bool checkAlias = string.IsNullOrEmpty(alias);
+				bool checkAlias = !string.IsNullOrEmpty(alias);
 				for(int j = 0; j < uniformsCount; j++)
 				{
 					if(checkAlias && uniforms[j].Alias == alias || uniforms[j].Name == name)
@@ -83,7 +83,7 @@ namespace PowerOfMind.Graphics
 			{
 				string name = declaration.Attributes[i].Name;
 				string alias = declaration.Attributes[i].Alias;
-				bool checkAlias = string.IsNullOrEmpty(alias);
+				bool checkAlias = !string.IsNullOrEmpty(alias);
 				for(int j = 0; j < inputsCount; j++)
 				{
 					if(checkAlias && inputs[j].Alias == alias || inputs[j].Name == name)

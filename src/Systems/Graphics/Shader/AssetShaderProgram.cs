@@ -34,6 +34,8 @@ namespace PowerOfMind.Graphics.Shader
 
 		public override bool Compile()
 		{
+			if(handle != 0) return true;
+
 			var baseLoc = location.Clone().WithPathPrefixOnce(SHADERS_LOC);
 			var stages = new List<ShaderStage>();
 			HashSet<string> includes = null;
