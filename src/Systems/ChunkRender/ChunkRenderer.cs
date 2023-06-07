@@ -5,6 +5,7 @@ using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -156,7 +157,7 @@ namespace PowerOfMind.Systems.ChunkRender
 		private int AddShader(IExtendedShaderProgram shader)
 		{
 			tmpPairs.Clear();
-			shader.MapDeclarationByIdentifier(uniformsDeclaration, tmpPairs);
+			shader.MapDeclaration(uniformsDeclaration, tmpPairs);
 
 			if(tmpPairs.TryGetValue(0, out var projMatrix))
 			{
@@ -251,9 +252,9 @@ _fail:
 								uniforms[shader.modelMatrix].SetValue(mat);
 							}
 
-							uniforms[prog.FindUniformIndex("rgbaLightIn")].SetValue(new float4(1, 1, 1, 1));
-							uniforms[prog.FindUniformIndex("rgbaTint")].SetValue(new float4(1, 1, 1, 1));
-							prog.BindTexture2D("tex", capi.BlockTextureAtlas.UnknownTexturePosition.atlasTextureId);
+							//uniforms[prog.FindUniformIndex("rgbaLightIn")].SetValue(new float4(1, 1, 1, 1));
+							//uniforms[prog.FindUniformIndex("rgbaTint")].SetValue(new float4(1, 1, 1, 1));
+							//prog.BindTexture2D("tex", capi.BlockTextureAtlas.UnknownTexturePosition.atlasTextureId);
 
 							rapi.RenderDrawable(info.drawableHandle);
 						}
@@ -446,28 +447,54 @@ _fail:
 					}
 					return EnumReduceUsageResult.RemovedChunkShader;
 				}
+
+				rebuildStructs.Add(chunkShaderId);
 				return EnumReduceUsageResult.RemovedBuilder;
 			}
 			return EnumReduceUsageResult.None;
 		}
 
-		private static int GetTypeSize(EnumShaderPrimitiveType type)
+		private unsafe static bool MemEquals(byte* a, byte* b, int length)
 		{
-			switch(type)
+			for(int i = length / 8; i > 0; i--)
 			{
-				case EnumShaderPrimitiveType.UByte: return 1;
-				case EnumShaderPrimitiveType.SByte: return 1;
-				case EnumShaderPrimitiveType.UShort: return 2;
-				case EnumShaderPrimitiveType.Short: return 2;
-				case EnumShaderPrimitiveType.UInt: return 4;
-				case EnumShaderPrimitiveType.Int: return 4;
-				case EnumShaderPrimitiveType.Half: return 2;
-				case EnumShaderPrimitiveType.Float: return 4;
-				case EnumShaderPrimitiveType.Double: return 8;
-				case EnumShaderPrimitiveType.UInt2101010Rev: return 4;
-				case EnumShaderPrimitiveType.Int2101010Rev: return 4;
-				default: throw new Exception("Invalid attribute type: " + type);
+				if(*(long*)a != *(long*)b)
+				{
+					return false;
+				}
+				a += 8;
+				b += 8;
 			}
+
+			if((length & 4) != 0)
+			{
+				if(*((int*)a) != *((int*)b))
+				{
+					return false;
+				}
+				a += 4;
+				b += 4;
+			}
+
+			if((length & 2) != 0)
+			{
+				if(*((short*)a) != *((short*)b))
+				{
+					return false;
+				}
+				a += 2;
+				b += 2;
+			}
+
+			if((length & 1) != 0)
+			{
+				if(*a != *b)
+				{
+					return false;
+				}
+			}
+
+			return true;
 		}
 
 		private enum EnumReduceUsageResult
@@ -577,7 +604,7 @@ _fail:
 			}
 		}
 
-		private class BuildTask
+		private class BuildTask//TODO: move temporary fields to separate class (builder context, for example)
 		{
 			public const int BLOCK_SIZE = 1024;
 
@@ -594,11 +621,6 @@ _fail:
 			public readonly List<byte[]> verticesBlocks = new List<byte[]>();
 			public readonly List<int[]> indicesBlocks = new List<int[]>();
 
-			public KeyValuePair<int, int>[][] builderVertexMaps;
-			public VertexDeclaration[] builderDeclarations;
-			public int[] builderVertexOffsets;
-			public int[] builderIndexOffsets;
-
 			private readonly IExtendedShaderProgram shader;
 			private readonly ChunkRenderer container;
 
@@ -613,23 +635,26 @@ _fail:
 
 			public void Run()
 			{
-				builderVertexOffsets = new int[builders.Length];
-				builderIndexOffsets = new int[builders.Length];
-
 				try
 				{
-					InitDeclaration();
-
 					var context = new BuilderContext(this, verticesStride);
+
+					context.InitDeclaration();
+
 					for(int i = 0; i < builders.Length; i++)
 					{
 						context.builderIndex = i;
-
-						builderVertexOffsets[i] = verticesCount;
-						builderIndexOffsets[i] = indicesCount;
+						context.commands.Add(new GraphicsCommand(GraphicsCommand.CommandType.SetBuilder, i));
 
 						var builderStruct = container.builders[builders[i]].builderStruct;
 						var builder = container.builders[builders[i]].builder;
+
+						if(context.tmpUniformsData.Length < builderStruct.GetUniformsSize())
+						{
+							context.tmpUniformsData = new byte[builderStruct.GetUniformsSize()];
+						}
+						context.uniformsMap.Clear();
+						shader.MapDeclaration(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
 
 						builder.Build(context);
 					}
@@ -643,70 +668,6 @@ _fail:
 				}
 
 				container.completedTasks.Add(this);
-			}
-
-			private void InitDeclaration()
-			{
-				this.builderVertexMaps = new KeyValuePair<int, int>[builders.Length][];
-				this.builderDeclarations = new VertexDeclaration[builders.Length];
-				var attributes = new RefList<VertexAttribute>();
-				for(int i = 0; i < builders.Length; i++)
-				{
-					shader.MapDeclaration(container.builders[builders[i]].builderStruct.GetVertexDeclaration(), attributes);
-					builderDeclarations[i] = new VertexDeclaration(attributes.ToArray());
-					attributes.Clear();
-				}
-
-				int vertStride = 0;
-				var tmpMap = new List<KeyValuePair<int, int>>();
-				var locationToAttrib = new Dictionary<int, int>();
-				for(int i = 0; i < builderDeclarations.Length; i++)
-				{
-					var declaration = builderDeclarations[i];
-					for(int j = 0; j < declaration.Attributes.Length; j++)
-					{
-						if(!locationToAttrib.TryGetValue(declaration.Attributes[j].Location, out var index))
-						{
-							index = attributes.Count;
-							AddAttrib(ref vertStride, declaration.Attributes, j, attributes);
-							locationToAttrib[declaration.Attributes[j].Location] = index;
-						}
-						else
-						{
-							if(declaration.Attributes[j].Size != attributes[index].Size || declaration.Attributes[j].Type != attributes[index].Type)
-							{
-								//TODO: log error
-								//logger.LogWarning("Vertex component {0} of builder {1} does not match size or type with other users of this shader. {2}({3}) was expected but {4}({5}) was provided.",
-								//	string.Format(string.IsNullOrEmpty(declaration.Attributes[j].Alias) ? "`{0}`" : "`{0}`[{1}]", declaration.Attributes[j].Name, declaration.Attributes[j].Alias),
-								//	builders[i], attributes[index].Type, attributes[index].Size, declaration.Attributes[j].Type, declaration.Attributes[j].Size);
-								continue;
-							}
-						}
-						tmpMap.Add(new KeyValuePair<int, int>(j, index));
-					}
-
-					builderVertexMaps[i] = tmpMap.ToArray();
-					tmpMap.Clear();
-				}
-				for(int i = 0; i < attributes.Count; i++)
-				{
-					ref readonly var attrib = ref attributes[i];
-					attributes[i] = new VertexAttribute(
-						attrib.Name,
-						attrib.Alias,
-						attrib.Location,
-						(uint)vertStride,
-						attrib.Offset,
-						attrib.InstanceDivisor,
-						attrib.Size,
-						attrib.Type,
-						attrib.Normalized,
-						attrib.IntegerTarget
-					);
-				}
-
-				this.declaration = new VertexDeclaration(attributes.ToArray());
-				this.verticesStride = vertStride;
 			}
 
 			private static void AddAttrib(ref int byteOffset, VertexAttribute[] attributes, int attribIndex, RefList<VertexAttribute> outAttribs)
@@ -724,7 +685,7 @@ _fail:
 					attrib.Normalized,
 					attrib.IntegerTarget
 				));
-				byteOffset += (int)attrib.Size * GetTypeSize(attrib.Type);
+				byteOffset += (int)attrib.Size * ShaderExtensions.GetTypeSize(attrib.Type);
 			}
 
 			private class BuilderContext : IChunkBuilderContext, VerticesContext.IProcessor
@@ -733,6 +694,16 @@ _fail:
 				public int indOffsetLocal = 0;
 
 				public int builderIndex = 0;
+				public byte[] tmpUniformsData = new byte[1024];
+
+				public Dictionary<int, int> uniformsMap = new Dictionary<int, int>();
+
+				public readonly List<GraphicsCommand> commands = new List<GraphicsCommand>();
+				public byte[] uniformsData = new byte[1024];
+				public int uniformsDataOffset = 0;
+
+				public KeyValuePair<int, int>[][] builderVertexMaps;
+				public VertexDeclaration[] builderDeclarations;
 
 				private readonly BuildTask task;
 				private readonly int verticesStride;
@@ -746,7 +717,11 @@ _fail:
 				private IndicesContext.ProcessorDelegate addIndicesCallback;
 
 				private Dictionary<int, int> componentsToMap = new Dictionary<int, int>();
+				private Dictionary<int, int> tmpUniformsMap = new Dictionary<int, int>();
 				private RefList<VertexAttribute> tmpAttributes = new RefList<VertexAttribute>();
+				private List<KeyValuePair<int, int>> tmpPairs = new List<KeyValuePair<int, int>>();
+
+				private readonly Action addMappedUniformsCallback;
 
 				public unsafe BuilderContext(BuildTask task, int verticesStride)
 				{
@@ -757,15 +732,124 @@ _fail:
 					task.indicesBlocks.Add(new int[BLOCK_SIZE]);
 
 					addIndicesCallback = InsertIndices;
+					addMappedUniformsCallback = AddMappedUniforms;
+				}
+
+				public void InitDeclaration()
+				{
+					var builders = task.builders;
+					this.builderVertexMaps = new KeyValuePair<int, int>[builders.Length][];
+					this.builderDeclarations = new VertexDeclaration[builders.Length];
+					var attributes = new RefList<VertexAttribute>();
+					for(int i = 0; i < builders.Length; i++)
+					{
+						task.shader.MapDeclaration(task.container.builders[builders[i]].builderStruct.GetVertexDeclaration(), attributes);
+						builderDeclarations[i] = new VertexDeclaration(attributes.ToArray());
+						attributes.Clear();
+					}
+
+					int vertStride = 0;
+					var tmpMap = new List<KeyValuePair<int, int>>();
+					var locationToAttrib = new Dictionary<int, int>();
+					for(int i = 0; i < builderDeclarations.Length; i++)
+					{
+						var declaration = builderDeclarations[i];
+						for(int j = 0; j < declaration.Attributes.Length; j++)
+						{
+							if(!locationToAttrib.TryGetValue(declaration.Attributes[j].Location, out var index))
+							{
+								index = attributes.Count;
+								AddAttrib(ref vertStride, declaration.Attributes, j, attributes);
+								locationToAttrib[declaration.Attributes[j].Location] = index;
+							}
+							else
+							{
+								if(declaration.Attributes[j].Size != attributes[index].Size || declaration.Attributes[j].Type != attributes[index].Type)
+								{
+									//TODO: log error
+									//logger.LogWarning("Vertex component {0} of builder {1} does not match size or type with other users of this shader. {2}({3}) was expected but {4}({5}) was provided.",
+									//	string.Format(string.IsNullOrEmpty(declaration.Attributes[j].Alias) ? "`{0}`" : "`{0}`[{1}]", declaration.Attributes[j].Name, declaration.Attributes[j].Alias),
+									//	builders[i], attributes[index].Type, attributes[index].Size, declaration.Attributes[j].Type, declaration.Attributes[j].Size);
+									continue;
+								}
+							}
+							tmpMap.Add(new KeyValuePair<int, int>(j, index));
+						}
+
+						builderVertexMaps[i] = tmpMap.ToArray();
+						tmpMap.Clear();
+					}
+					for(int i = 0; i < attributes.Count; i++)
+					{
+						ref readonly var attrib = ref attributes[i];
+						attributes[i] = new VertexAttribute(
+							attrib.Name,
+							attrib.Alias,
+							attrib.Location,
+							(uint)vertStride,
+							attrib.Offset,
+							attrib.InstanceDivisor,
+							attrib.Size,
+							attrib.Type,
+							attrib.Normalized,
+							attrib.IntegerTarget
+						);
+					}
+
+					task.declaration = new VertexDeclaration(attributes.ToArray());
+					task.verticesStride = vertStride;
 				}
 
 				unsafe void IChunkBuilderContext.AddData(IDrawableData data)
+				{
+					AddData(data);
+				}
+
+				unsafe void IChunkBuilderContext.AddData<T>(IDrawableData data, in T uniformsData)
+				{
+					int startUniformsDataOffset = uniformsDataOffset;
+					MapUniforms(uniformsData);
+					if(tmpUniformsMap.Count > 0)
+					{
+						if(!AddData(data, addMappedUniformsCallback))
+						{
+							uniformsDataOffset = startUniformsDataOffset;
+						}
+					}
+					else
+					{
+						AddData(data);
+					}
+				}
+
+				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
+				{
+					if(isDynamic || (data == null && !hasIndices)) return;
+					tmpAttributes.Clear();
+					task.shader.MapDeclaration(declaration, tmpAttributes);
+					for(int i = 0; i < tmpAttributes.Count; i++)
+					{
+						if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
+						{
+							int attribIndex = builderVertexMaps[builderIndex][mapIndex].Value;
+							ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
+							if(ShaderExtensions.GetTypeSize(tmpAttributes[i].Type) == ShaderExtensions.GetTypeSize(vertAttrib.Type))//TODO: log warning otherwise?
+							{
+								componentsToMap.Remove(tmpAttributes[i].Location);
+
+								CopyComponentData(attribIndex, (byte*)data + tmpAttributes[i].Offset, stride);
+							}
+						}
+					}
+				}
+
+				private unsafe bool AddData(IDrawableData data, Action beforeCmd = null)
 				{
 					currentVertCount = data.VerticesCount;
 					currentIndCount = data.IndicesCount;
 					EnsureCapacity();
 					componentsToMap.Clear();
-					var map = task.builderVertexMaps[builderIndex];
+					var map = builderVertexMaps[builderIndex];
 					for(int i = 0; i < map.Length; i++)
 					{
 						componentsToMap[task.declaration.Attributes[map[i].Value].Location] = i;
@@ -778,7 +862,7 @@ _fail:
 					{
 						if(componentsToMap.Count > 0)
 						{
-							var declaration = task.builderDeclarations[builderIndex];
+							var declaration = builderDeclarations[builderIndex];
 							var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
 							var stride = builderStruct.GetVertexStride();
 							builderStruct.ProvideVertexData(ptr => {
@@ -790,38 +874,34 @@ _fail:
 							});
 						}
 
+						beforeCmd?.Invoke();
+						commands.Add(new GraphicsCommand(GraphicsCommand.CommandType.DrawIndices, task.indicesCount, currentIndCount));
+
 						task.verticesCount += currentVertCount;
 						task.indicesCount += currentIndCount;
 						currentVertBlock += (vertOffsetLocal + currentVertCount) / BLOCK_SIZE;
 						currentIndBlock += (indOffsetLocal + currentIndCount) / BLOCK_SIZE;
 						vertOffsetLocal = (vertOffsetLocal + currentVertCount) % BLOCK_SIZE;
 						indOffsetLocal = (indOffsetLocal + currentIndCount) % BLOCK_SIZE;
+
+						return true;
 					}
+					return false;
 				}
 
-				unsafe void IChunkBuilderContext.AddData<T>(IDrawableData data, T* uniformsData)
+				private unsafe void MapUniforms<T>(in T uniformsData) where T : unmanaged, IUniformsData
 				{
-					throw new NotImplementedException();
+					var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
+					tmpUniformsMap.Clear();
+					task.shader.MapDeclaration(uniformsData.GetDeclaration(), tmpUniformsMap);
+					builderStruct.DiffUniforms(uniformsData, uniformsMap, tmpUniformsMap, tmpPairs, ref this.uniformsData, ref this.uniformsDataOffset);
 				}
 
-				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
+				private void AddMappedUniforms()
 				{
-					if(isDynamic || (data == null && !hasIndices)) return;
-					tmpAttributes.Clear();
-					task.shader.MapDeclaration(declaration, tmpAttributes);
-					for(int i = 0; i < tmpAttributes.Count; i++)
+					foreach(var pair in tmpUniformsMap)
 					{
-						if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
-						{
-							int attribIndex = task.builderVertexMaps[builderIndex][mapIndex].Value;
-							ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
-							if(tmpAttributes[i].Size == vertAttrib.Size && tmpAttributes[i].Type == vertAttrib.Type)//TODO: log warning otherwise?
-							{
-								componentsToMap.Remove(tmpAttributes[i].Location);
-
-								CopyComponentData(attribIndex, (byte*)data + tmpAttributes[i].Offset, stride);
-							}
-						}
+						commands.Add(new GraphicsCommand(GraphicsCommand.CommandType.OverrideUniform, pair.Key, pair.Value));
 					}
 				}
 
@@ -830,7 +910,7 @@ _fail:
 					ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
 					int buffStride = task.verticesStride;
 
-					long copyCount = GetTypeSize(vertAttrib.Type) * vertAttrib.Size;
+					long copyCount = ShaderExtensions.GetTypeSize(vertAttrib.Type) * vertAttrib.Size;
 					long buffOffset = vertOffsetLocal;
 					int countToCopy = currentVertCount;
 
@@ -962,6 +1042,43 @@ _fail:
 					}
 				}
 			}
+
+			private readonly struct GraphicsCommand
+			{
+				public readonly CommandType Type;
+				public readonly int arg0, arg1, arg2;
+
+				public GraphicsCommand(CommandType type, int arg0, int arg1, int arg2)
+				{
+					Type = type;
+					this.arg0 = arg0;
+					this.arg1 = arg1;
+					this.arg2 = arg2;
+				}
+
+				public GraphicsCommand(CommandType type, int arg0, int arg1)
+				{
+					Type = type;
+					this.arg0 = arg0;
+					this.arg1 = arg1;
+					this.arg2 = 0;
+				}
+
+				public GraphicsCommand(CommandType type, int arg0)
+				{
+					Type = type;
+					this.arg0 = arg0;
+					this.arg1 = 0;
+					this.arg2 = 0;
+				}
+
+				public enum CommandType
+				{
+					DrawIndices,
+					SetBuilder,
+					OverrideUniform
+				}
+			}
 		}
 
 		private interface IBuilderStructContainer
@@ -971,6 +1088,12 @@ _fail:
 			int GetVertexStride();
 
 			void ProvideVertexData(DataProcessor processor);
+
+			int GetUniformsSize();
+
+			UniformsDeclaration GetUniformsDeclaration();
+
+			void DiffUniforms<T>(in T otherData, Dictionary<int, int> uniformsMap, Dictionary<int, int> otherMap, List<KeyValuePair<int, int>> tmpList, ref byte[] uniformsData, ref int uniformsDataOffset) where T : unmanaged, IUniformsData;
 		}
 
 		private unsafe delegate void DataProcessor(byte* ptr);
@@ -1003,6 +1126,70 @@ _fail:
 				fixed(TVertex* ptr = &vertexDefaults)
 				{
 					processor((byte*)ptr);
+				}
+			}
+
+			unsafe int IBuilderStructContainer.GetUniformsSize()
+			{
+				return sizeof(TUniform);
+			}
+
+			UniformsDeclaration IBuilderStructContainer.GetUniformsDeclaration()
+			{
+				return uniformDefaults.GetDeclaration();
+			}
+
+			unsafe void IBuilderStructContainer.DiffUniforms<T>(in T otherData, Dictionary<int, int> uniformsMap, Dictionary<int, int> otherMap, List<KeyValuePair<int, int>> tmpList,
+				ref byte[] uniformsData, ref int uniformsDataOffset)
+			{
+				tmpList.Clear();
+				tmpList.AddRange(otherMap);
+				fixed(T* oPtr = &otherData)
+				{
+					fixed(TUniform* uPtr = &uniformDefaults)
+					{
+						var uniforms = uniformDefaults.GetDeclaration().Properties;
+						var otherUniforms = otherData.GetDeclaration().Properties;
+						foreach(var pair in tmpList)
+						{
+							if(!uniformsMap.TryGetValue(pair.Key, out var index))
+							{
+								otherMap.Remove(pair.Key);
+								continue;
+							}
+
+							int size = uniforms[index].Size * ShaderExtensions.GetTypeSize(uniforms[index].Type);
+							if(MemEquals((byte*)uPtr + uniforms[index].Offset, (byte*)oPtr + otherUniforms[index].Offset, size))
+							{
+								otherMap.Remove(pair.Key);
+							}
+							else
+							{
+								EnsureBufferSize(ref uniformsData, uniformsDataOffset, size);
+								fixed(byte* ptr = uniformsData)
+								{
+									Buffer.MemoryCopy((byte*)oPtr + otherUniforms[index].Offset, ptr + uniformsDataOffset, size, size);
+									uniformsDataOffset += size;
+								}
+							}
+						}
+					}
+				}
+			}
+
+			private unsafe static void EnsureBufferSize(ref byte[] uniformsData, int uniformsDataOffset, int addSize)
+			{
+				if(uniformsData.Length < uniformsDataOffset + addSize)
+				{
+					var newBuffer = new byte[uniformsData.Length * 2];
+					fixed(byte* ptrFrom = uniformsData)
+					{
+						fixed(byte* ptrTo = newBuffer)
+						{
+							Buffer.MemoryCopy(ptrFrom, ptrTo, uniformsDataOffset, uniformsDataOffset);
+						}
+					}
+					uniformsData = newBuffer;
 				}
 			}
 		}
@@ -1072,7 +1259,7 @@ _fail:
 		/// Adds drawable data to the chunk, only static data will be added, dynamic data will be ignored
 		/// </summary>
 		/// <param name="uniformsData">Additional data by which rendering will be grouped. For example MAIN_TEXTURE.</param>
-		unsafe void AddData<T>(IDrawableData data, T* uniformsData) where T : unmanaged, IUniformsData;
+		unsafe void AddData<T>(IDrawableData data, in T uniformsData) where T : unmanaged, IUniformsData;
 
 		/// <summary>
 		/// Adds drawable data to the chunk, only static data will be added, dynamic data will be ignored

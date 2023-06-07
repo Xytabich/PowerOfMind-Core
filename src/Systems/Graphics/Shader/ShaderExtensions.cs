@@ -40,7 +40,7 @@ namespace PowerOfMind.Graphics
 			shader.BindTexture(shader.FindUniformIndex(samplerName), target, textureId, textureNumber);
 		}
 
-		public static void MapDeclarationByIdentifier(this IExtendedShaderProgram shader, UniformsDeclaration declaration, IDictionary<int, int> outMap)
+		public static void MapDeclaration(this IExtendedShaderProgram shader, UniformsDeclaration declaration, IDictionary<int, int> outMap)
 		{
 			var uniforms = shader.Uniforms.Properties;
 			int uniformsCount = uniforms.Length;
@@ -53,6 +53,11 @@ namespace PowerOfMind.Graphics
 				{
 					if(checkAlias && uniforms[j].Alias == alias || uniforms[j].Name == name)
 					{
+						if(GetTypeSize(declaration.Properties[i].Type) != GetTypeSize(uniforms[j].Type) || declaration.Properties[i].Size != uniforms[j].Size)
+						{
+							throw new Exception("Uniform data structure does not match shader");
+						}
+
 						outMap[i] = j;
 						break;
 					}
@@ -99,7 +104,7 @@ namespace PowerOfMind.Graphics
 		{
 			ref readonly var attrib = ref attributes[attribIndex];
 			ref readonly var input = ref inputs[inputIndex];
-			if(attrib.Size > input.Size) throw new Exception("Attribute data size too big for the shader");
+			if(attrib.Size != input.Size) throw new Exception("Attribute data size does not match shader");
 			outList.Add(new VertexAttribute(
 				input.Name,
 				input.Alias ?? attrib.Alias,
@@ -114,7 +119,7 @@ namespace PowerOfMind.Graphics
 			));
 		}
 
-		private static bool IsInteger(EnumShaderPrimitiveType type)
+		public static bool IsInteger(EnumShaderPrimitiveType type)
 		{
 			switch(type)
 			{
@@ -124,6 +129,29 @@ namespace PowerOfMind.Graphics
 					return false;
 				default:
 					return true;
+			}
+		}
+
+		public static int GetTypeSize(EnumShaderPrimitiveType type)
+		{
+			switch(type)
+			{
+				case EnumShaderPrimitiveType.UByte:
+				case EnumShaderPrimitiveType.SByte:
+					return 1;
+				case EnumShaderPrimitiveType.UShort:
+				case EnumShaderPrimitiveType.Short:
+				case EnumShaderPrimitiveType.Half:
+					return 2;
+				case EnumShaderPrimitiveType.UInt:
+				case EnumShaderPrimitiveType.Int:
+				case EnumShaderPrimitiveType.Float:
+				case EnumShaderPrimitiveType.UInt2101010Rev:
+				case EnumShaderPrimitiveType.Int2101010Rev:
+					return 4;
+				case EnumShaderPrimitiveType.Double:
+					return 8;
+				default: throw new Exception("Invalid primitive type: " + type);
 			}
 		}
 	}
