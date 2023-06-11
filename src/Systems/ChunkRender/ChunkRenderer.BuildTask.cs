@@ -246,6 +246,7 @@ namespace PowerOfMind.Systems.ChunkRender
 								{
 									firstDraw = true;
 									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+									drawCount = 0;
 								}
 								currentStruct = task.container.builders[task.builders[this.commands[i].arg0]].builderStruct;
 
@@ -257,6 +258,7 @@ namespace PowerOfMind.Systems.ChunkRender
 								{
 									firstDraw = true;
 									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+									drawCount = 0;
 								}
 								tmpUniformsMap.Remove((int)this.commands[i].arg0);
 								currentUniforms[uniformToIndexMap[(int)this.commands[i].arg0]] = (int)this.commands[i].arg1;
@@ -327,25 +329,20 @@ namespace PowerOfMind.Systems.ChunkRender
 					currentUniforms.Fill(-1);
 					uint indicesCount = 0;
 					uint indicesStart = 0;
-					bool isNewUniformGroup = false;
 					for(int i = 0; i < drawGroups.Count; i++)
 					{
-						if(isNewUniformGroup)
-						{
-							isNewUniformGroup = false;
-							if(indicesCount > 0)
-							{
-								list.Add(new GraphicsCommand(indicesStart, indicesCount));
-								indicesStart += indicesCount;
-								indicesCount = 0;
-							}
-						}
 						var drawGroup = drawGroups[i];
 						for(int j = 0; j < uniformsCount; j++)
 						{
 							if(uniformsPerDrawGroup[j + drawGroup.uniformsIndex] != currentUniforms[j])
 							{
-								isNewUniformGroup = true;
+								if(indicesCount > 0)
+								{
+									list.Add(new GraphicsCommand(indicesStart, indicesCount));
+									indicesStart += indicesCount;
+									indicesCount = 0;
+								}
+
 								currentUniforms[j] = uniformsPerDrawGroup[j + drawGroup.uniformsIndex];
 
 								var block = this.uniformsData.blocks[currentUniforms[j]];
@@ -425,7 +422,7 @@ namespace PowerOfMind.Systems.ChunkRender
 						for(int j = 0; j < drawGroup.cmdCount; j++)
 						{
 							var cmd = this.commands[drawGroup.cmdIndex + j];
-							CopyIndicesFromBlock((int)cmd.arg0, indices, indicesStart, (int)cmd.arg1);
+							CopyIndicesFromBlock((int)cmd.arg0, indices, indicesStart + indicesCount, (int)cmd.arg1);
 							indicesCount += cmd.arg1;
 						}
 					}
@@ -567,7 +564,7 @@ namespace PowerOfMind.Systems.ChunkRender
 					int buffStride = task.verticesStride;
 
 					long copyCount = ShaderExtensions.GetTypeSize(vertAttrib.Type) * vertAttrib.Size;
-					long buffOffset = vertOffsetLocal;
+					long buffOffset = vertOffsetLocal * task.verticesStride;
 					int countToCopy = currentVertCount;
 
 					int blockIndex = this.currentVertBlock;
