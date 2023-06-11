@@ -89,8 +89,13 @@
     <Compile Include="src\Collections\HeapCollection.cs" />
     <Compile Include="src\Collections\RefList.cs" />
     <Compile Include="src\PowerOfMindCore.cs" />
+    <Compile Include="src\Systems\ChunkRender\ChunkRenderer.BuilderStructContainer.cs" />
+    <Compile Include="src\Systems\ChunkRender\ChunkRenderer.BuildTask.cs" />
     <Compile Include="src\Systems\ChunkRender\ChunkRenderer.cs" />
+    <Compile Include="src\Systems\ChunkRender\ChunkRenderer.Helpers.cs" />
     <Compile Include="src\Systems\ChunkRender\ChunkRenderSystem.cs" />
+    <Compile Include="src\Systems\ChunkRender\IChunkBuilder.cs" />
+    <Compile Include="src\Systems\ChunkRender\IChunkBuilderContext.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\IDrawableData.cs" />
     <Compile Include="src\Systems\Graphics\Shader\IUniformsData.cs" />
     <Compile Include="src\Systems\Graphics\GraphicsSystem.cs" />
@@ -129,6 +134,7 @@
     <Compile Include="src\Systems\Graphics\Drawable\VertexAttributeAlias.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\VertexComponentAttribute.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\VertexDeclaration.cs" />
+    <Compile Include="src\Utils\XXHash32.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>

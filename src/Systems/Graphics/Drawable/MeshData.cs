@@ -26,8 +26,8 @@ namespace PowerOfMind.Graphics
 		public VertexDeclaration VertexDeclaration;
 
 		EnumDrawMode IDrawableData.DrawMode => DrawMode;
-		int IDrawableData.IndicesCount => IndicesCount;
-		int IDrawableData.VerticesCount => VerticesCount;
+		uint IDrawableData.IndicesCount => (uint)IndicesCount;
+		uint IDrawableData.VerticesCount => (uint)VerticesCount;
 		int IDrawableData.VertexBuffersCount => 1;
 
 		public MeshData(T[] vertices, int[] indices)
@@ -58,7 +58,7 @@ namespace PowerOfMind.Graphics
 			{
 				fixed(int* ptr = Indices)
 				{
-					context.Process(ptr + IndicesOffset, !IndicesStatic);
+					context.Process((uint*)ptr + IndicesOffset, !IndicesStatic);
 				}
 			}
 		}
@@ -99,8 +99,8 @@ namespace PowerOfMind.Graphics
 		public VertexDeclaration DynamicVertexDeclaration;
 
 		EnumDrawMode IDrawableData.DrawMode => DrawMode;
-		int IDrawableData.IndicesCount => IndicesCount;
-		int IDrawableData.VerticesCount => VerticesCount;
+		uint IDrawableData.IndicesCount => (uint)IndicesCount;
+		uint IDrawableData.VerticesCount => (uint)VerticesCount;
 		int IDrawableData.VertexBuffersCount => 1;
 
 		public MeshData(TStatic[] staticVertices, TDynamic[] dynamicVertices, int[] indices)
@@ -121,7 +121,7 @@ namespace PowerOfMind.Graphics
 			{
 				fixed(int* ptr = Indices)
 				{
-					context.Process(ptr + IndicesOffset, !IndicesStatic);
+					context.Process((uint*)ptr + IndicesOffset, !IndicesStatic);
 				}
 			}
 		}

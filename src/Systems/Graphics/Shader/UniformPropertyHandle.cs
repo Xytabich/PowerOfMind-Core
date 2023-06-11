@@ -9,18 +9,21 @@ namespace PowerOfMind.Graphics.Shader
 		public readonly int Location;
 		public readonly EnumShaderPrimitiveType Type;
 		public readonly EnumUniformStructType StructType;
-		public readonly int Size;
+		public readonly int UniformSize;
+		public readonly int StructSize;
 
 		private readonly IUniformVariableHandler handler;
 
-		internal UniformPropertyHandle(int location, string name, string alias, EnumShaderPrimitiveType type, EnumUniformStructType structType, int size, IUniformVariableHandler handler)
+		internal UniformPropertyHandle(int location, string name, string alias, EnumShaderPrimitiveType type,
+			EnumUniformStructType structType, int uniformSize, int structSize, IUniformVariableHandler handler)
 		{
 			Location = location;
 			Name = name;
 			Alias = alias?.ToUpperInvariant();
 			StructType = structType;
 			Type = type;
-			Size = size;
+			UniformSize = uniformSize;
+			StructSize = structSize;
 
 			this.handler = handler;
 		}

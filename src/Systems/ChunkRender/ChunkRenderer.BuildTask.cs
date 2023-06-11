@@ -1,0 +1,715 @@
+﻿using PowerOfMind.Collections;
+using PowerOfMind.Graphics;
+using PowerOfMind.Graphics.Drawable;
+using PowerOfMind.Graphics.Shader;
+using System;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using Vintagestory.API.Client;
+using Vintagestory.API.Util;
+
+namespace PowerOfMind.Systems.ChunkRender
+{
+	public partial class ChunkRenderer
+	{
+		private class BuildTask
+		{
+			public const int BLOCK_SIZE = 1024;
+
+			public bool failed = false;
+
+			public readonly int[] builders;
+			public readonly int version;
+			public readonly int chunkShaderId;
+			public GraphicsCommand[] commands;
+			public UniformPointer[] uniformsMap;
+			public byte[] uniformsData;
+
+			public uint verticesCount;
+			public uint indicesCount;
+			public int verticesStride;
+			public VertexDeclaration declaration;
+			public readonly List<byte[]> verticesBlocks = new List<byte[]>();
+			public uint[] indices;
+
+			private readonly IExtendedShaderProgram shader;
+			private readonly ChunkRenderer container;
+
+			public BuildTask(ChunkRenderer container, IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
+			{
+				this.container = container;
+				this.shader = shader;
+				this.builders = builders;
+				this.version = version;
+				this.chunkShaderId = chunkShaderId;
+			}
+
+			public void Run()
+			{
+				try
+				{
+					var context = new BuilderContext(this, verticesStride);
+
+					context.InitDeclaration();
+
+					for(int i = 0; i < builders.Length; i++)
+					{
+						context.SetBuilder(i);
+
+						var builderStruct = container.builders[builders[i]].builderStruct;
+						var builder = container.builders[builders[i]].builder;
+
+						context.uniformsMap.Clear();
+						shader.MapDeclarationInv(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
+						foreach(var pair in context.uniformsMap)
+						{
+							if(!context.uniformToIndexMap.ContainsKey(pair.Key))
+							{
+								context.uniformToIndexMap[pair.Key] = context.uniformToIndexMap.Count;
+							}
+						}
+
+						builder.Build(context);
+					}
+
+					context.BuildCommands(out commands, out indices, out uniformsData, out uniformsMap);
+				}
+				catch(Exception e)
+				{
+					failed = true;
+					//TODO: log exception
+				}
+
+				container.completedTasks.Add(this);
+			}
+
+			private static void AddAttrib(ref int byteOffset, VertexAttribute[] attributes, int attribIndex, RefList<VertexAttribute> outAttribs)
+			{
+				ref readonly var attrib = ref attributes[attribIndex];
+				outAttribs.Add(new VertexAttribute(
+					attrib.Name,
+					attrib.Alias,
+					attrib.Location,
+					0,
+					(uint)byteOffset,
+					0,
+					attrib.Size,
+					attrib.Type,
+					attrib.Normalized,
+					attrib.IntegerTarget
+				));
+				byteOffset += (int)attrib.Size * ShaderExtensions.GetTypeSize(attrib.Type);
+			}
+
+			private class BuilderContext : IChunkBuilderContext, VerticesContext.IProcessor
+			{
+				public int vertOffsetLocal = 0;
+				public int indOffsetLocal = 0;
+
+				public int builderIndex = 0;
+
+				public readonly Dictionary<int, int> uniformsMap = new Dictionary<int, int>();
+				public readonly Dictionary<int, int> uniformToIndexMap = new Dictionary<int, int>();
+
+				public KeyValuePair<int, int>[][] builderVertexMaps;
+				public VertexDeclaration[] builderDeclarations;
+
+				private readonly BuildTask task;
+				private readonly int verticesStride;
+
+				private readonly List<BuildCommand> commands = new List<BuildCommand>();
+				private readonly List<uint[]> indicesBlocks = new List<uint[]>();
+				private readonly UniformsDataCollection uniformsData = new UniformsDataCollection(BLOCK_SIZE);
+
+				private int currentVertCount;
+				private int currentIndCount;
+				private int currentVertBlock = 0;
+				private int currentIndBlock = 0;
+
+				private bool hasIndices = false;
+				private IndicesContext.ProcessorDelegate addIndicesCallback;
+
+				private readonly Dictionary<int, int> componentsToMap = new Dictionary<int, int>();
+				private readonly Dictionary<int, int> tmpUniformsMap = new Dictionary<int, int>();
+				private readonly RefList<VertexAttribute> tmpAttributes = new RefList<VertexAttribute>();
+				private readonly List<KeyValuePair<int, int>> tmpPairs = new List<KeyValuePair<int, int>>();
+
+				private readonly Action addMappedUniformsCallback;
+
+				public unsafe BuilderContext(BuildTask task, int verticesStride)
+				{
+					this.task = task;
+					this.verticesStride = verticesStride;
+
+					task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
+					indicesBlocks.Add(new uint[BLOCK_SIZE]);
+
+					addIndicesCallback = InsertIndices;
+					addMappedUniformsCallback = AddMappedUniforms;
+				}
+
+				public void InitDeclaration()
+				{
+					var builders = task.builders;
+					this.builderVertexMaps = new KeyValuePair<int, int>[builders.Length][];
+					this.builderDeclarations = new VertexDeclaration[builders.Length];
+					var attributes = new RefList<VertexAttribute>();
+					for(int i = 0; i < builders.Length; i++)
+					{
+						task.shader.MapDeclaration(task.container.builders[builders[i]].builderStruct.GetVertexDeclaration(), attributes);
+						builderDeclarations[i] = new VertexDeclaration(attributes.ToArray());
+						attributes.Clear();
+					}
+
+					int vertStride = 0;
+					var tmpMap = new List<KeyValuePair<int, int>>();
+					var locationToAttrib = new Dictionary<int, int>();
+					for(int i = 0; i < builderDeclarations.Length; i++)
+					{
+						var declaration = builderDeclarations[i];
+						for(int j = 0; j < declaration.Attributes.Length; j++)
+						{
+							if(!locationToAttrib.TryGetValue(declaration.Attributes[j].Location, out var index))
+							{
+								index = attributes.Count;
+								AddAttrib(ref vertStride, declaration.Attributes, j, attributes);
+								locationToAttrib[declaration.Attributes[j].Location] = index;
+							}
+							else
+							{
+								if(declaration.Attributes[j].Size != attributes[index].Size || declaration.Attributes[j].Type != attributes[index].Type)
+								{
+									//TODO: log error
+									//logger.LogWarning("Vertex component {0} of builder {1} does not match size or type with other users of this shader. {2}({3}) was expected but {4}({5}) was provided.",
+									//	string.Format(string.IsNullOrEmpty(declaration.Attributes[j].Alias) ? "`{0}`" : "`{0}`[{1}]", declaration.Attributes[j].Name, declaration.Attributes[j].Alias),
+									//	builders[i], attributes[index].Type, attributes[index].Size, declaration.Attributes[j].Type, declaration.Attributes[j].Size);
+									continue;
+								}
+							}
+							tmpMap.Add(new KeyValuePair<int, int>(j, index));
+						}
+
+						builderVertexMaps[i] = tmpMap.ToArray();
+						tmpMap.Clear();
+					}
+					for(int i = 0; i < attributes.Count; i++)
+					{
+						ref readonly var attrib = ref attributes[i];
+						attributes[i] = new VertexAttribute(
+							attrib.Name,
+							attrib.Alias,
+							attrib.Location,
+							(uint)vertStride,
+							attrib.Offset,
+							attrib.InstanceDivisor,
+							attrib.Size,
+							attrib.Type,
+							attrib.Normalized,
+							attrib.IntegerTarget
+						);
+					}
+
+					task.declaration = new VertexDeclaration(attributes.ToArray());
+					task.verticesStride = vertStride;
+				}
+
+				public void SetBuilder(int builderIndex)
+				{
+					this.builderIndex = builderIndex;
+					this.commands.Add(new BuildCommand(BuildCommand.CommandType.SetBuilder, (uint)builderIndex));
+				}
+
+				public void BuildCommands(out GraphicsCommand[] commands, out uint[] indices, out byte[] uniformsData, out UniformPointer[] uniformPointers)
+				{
+					int uniformsCount = uniformToIndexMap.Count;
+					var currentUniforms = new int[uniformsCount];
+					currentUniforms.Fill(-1);
+
+					var uniformsVariantsCount = new int[uniformsCount];
+
+					var usedUniformVariants = new HashSet<UniformKey>();
+					var uniformsPerDrawGroup = new RefList<int>();
+					var drawGroups = new List<DrawGroup>();
+
+					bool firstDraw = true;
+					int drawUniformGroup = 0;
+					int drawStartIndex = 0;
+					int drawCount = 0;
+					IBuilderStructContainer currentStruct = null;
+					for(int i = 0; i < this.commands.Count; i++)
+					{
+						switch(this.commands[i].type)
+						{
+							case BuildCommand.CommandType.SetBuilder:
+								if(!firstDraw)
+								{
+									firstDraw = true;
+									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+								}
+								currentStruct = task.container.builders[task.builders[this.commands[i].arg0]].builderStruct;
+
+								tmpUniformsMap.Clear();
+								task.shader.MapDeclarationInv(currentStruct.GetUniformsDeclaration(), tmpUniformsMap);
+								break;
+							case BuildCommand.CommandType.OverrideUniform:
+								if(!firstDraw)
+								{
+									firstDraw = true;
+									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+								}
+								tmpUniformsMap.Remove((int)this.commands[i].arg0);
+								currentUniforms[uniformToIndexMap[(int)this.commands[i].arg0]] = (int)this.commands[i].arg1;
+								break;
+							case BuildCommand.CommandType.DrawIndices:
+								if(firstDraw)
+								{
+									if(tmpUniformsMap.Count > 0)
+									{
+										currentStruct.CollectUniformsData(tmpUniformsMap, tmpPairs, this.uniformsData);
+										foreach(var pair in tmpUniformsMap)
+										{
+											currentUniforms[uniformToIndexMap[pair.Key]] = pair.Value;
+										}
+									}
+
+									drawUniformGroup = uniformsPerDrawGroup.Count;
+
+									firstDraw = false;
+									for(int j = 0; j < uniformsCount; j++)
+									{
+										if(usedUniformVariants.Add(new UniformKey(j, currentUniforms[j])))
+										{
+											uniformsVariantsCount[j]++;
+										}
+
+										uniformsPerDrawGroup.Add(currentUniforms[j]);
+									}
+
+									drawStartIndex = i;
+								}
+								drawCount++;
+								break;
+						}
+					}
+					if(!firstDraw)
+					{
+						drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+					}
+
+					var pointers = new List<UniformPointer>();
+					var uniformsMap = new int[uniformsCount];
+					var shaderUniforms = task.shader.Uniforms.Properties;
+					foreach(var pair in uniformToIndexMap)
+					{
+						if(uniformsVariantsCount[pair.Value] == 0)
+						{
+							uniformsMap[pair.Value] = -1;
+						}
+						else
+						{
+							uniformsMap[pair.Value] = pointers.Count;
+							pointers.Add(new UniformPointer(pair.Key, shaderUniforms[pair.Key].UniformSize * ShaderExtensions.GetTypeSize(shaderUniforms[pair.Key].Type), shaderUniforms[pair.Key].UniformSize / shaderUniforms[pair.Key].StructSize));
+						}
+					}
+
+					var compareOrderByUsage = new int[uniformsCount];
+					for(int i = 0; i < uniformsCount; i++) compareOrderByUsage[i] = i;
+					Array.Sort(compareOrderByUsage, (a, b) => {
+						int c = uniformsVariantsCount[b].CompareTo(uniformsVariantsCount[a]);
+						if(c != 0) return c;
+						return a.CompareTo(b);
+					});
+					drawGroups.Sort((a, b) => CompareUniformGroups(a.uniformsIndex, b.uniformsIndex, uniformsPerDrawGroup, compareOrderByUsage));
+
+					indices = new uint[task.indicesCount];
+					var list = new List<GraphicsCommand>();
+					currentUniforms.Fill(-1);
+					uint indicesCount = 0;
+					uint indicesStart = 0;
+					bool isNewUniformGroup = false;
+					for(int i = 0; i < drawGroups.Count; i++)
+					{
+						if(isNewUniformGroup)
+						{
+							isNewUniformGroup = false;
+							if(indicesCount > 0)
+							{
+								list.Add(new GraphicsCommand(indicesStart, indicesCount));
+								indicesStart += indicesCount;
+								indicesCount = 0;
+							}
+						}
+						var drawGroup = drawGroups[i];
+						for(int j = 0; j < uniformsCount; j++)
+						{
+							if(uniformsPerDrawGroup[j + drawGroup.uniformsIndex] != currentUniforms[j])
+							{
+								isNewUniformGroup = true;
+								currentUniforms[j] = uniformsPerDrawGroup[j + drawGroup.uniformsIndex];
+
+								var block = this.uniformsData.blocks[currentUniforms[j]];
+								var uniformIndex = pointers[uniformsMap[j]].Index;
+								list.Add(new GraphicsCommand((uint)block.offset, (uint)(block.size /
+									(shaderUniforms[uniformIndex].StructSize * ShaderExtensions.GetTypeSize(shaderUniforms[uniformIndex].Type))), (uint)uniformsMap[j]));
+							}
+						}
+						for(int j = 0; j < drawGroup.cmdCount; j++)
+						{
+							var cmd = this.commands[drawGroup.cmdIndex + j];
+							CopyIndicesFromBlock((int)cmd.arg0, indices, indicesStart, (int)cmd.arg1);
+							indicesCount += cmd.arg1;
+						}
+					}
+					if(indicesCount > 0)
+					{
+						list.Add(new GraphicsCommand(indicesStart, indicesCount));
+					}
+
+					commands = list.ToArray();
+					uniformsData = this.uniformsData.dataBuffer.ToArray();
+					uniformPointers = pointers.ToArray();
+				}
+
+				unsafe void IChunkBuilderContext.AddData(IDrawableData data)
+				{
+					if(data.DrawMode != EnumDrawMode.Triangles) throw new InvalidOperationException("Only triangles are allowed here");
+					AddData(data);
+				}
+
+				unsafe void IChunkBuilderContext.AddData<T>(IDrawableData data, in T uniformsData)
+				{
+					if(data.DrawMode != EnumDrawMode.Triangles) throw new InvalidOperationException("Only triangles are allowed here");
+					MapUniforms(uniformsData);
+					if(tmpUniformsMap.Count > 0)
+					{
+						AddData(data, addMappedUniformsCallback);
+					}
+					else
+					{
+						AddData(data);
+					}
+				}
+
+				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
+				{
+					if(isDynamic || (data == null && !hasIndices)) return;
+					tmpAttributes.Clear();
+					task.shader.MapDeclaration(declaration, tmpAttributes);
+					for(int i = 0; i < tmpAttributes.Count; i++)
+					{
+						if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
+						{
+							int attribIndex = builderVertexMaps[builderIndex][mapIndex].Value;
+							ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
+							if(ShaderExtensions.GetTypeSize(tmpAttributes[i].Type) == ShaderExtensions.GetTypeSize(vertAttrib.Type))//TODO: log warning otherwise?
+							{
+								componentsToMap.Remove(tmpAttributes[i].Location);
+
+								CopyComponentData(attribIndex, (byte*)data + tmpAttributes[i].Offset, stride);
+							}
+						}
+					}
+				}
+
+				private unsafe void CopyIndicesFromBlock(int index, uint[] outIndices, uint outIndicesIndex, int count)
+				{
+					int blockIndex = index / BLOCK_SIZE;
+					int blockOffset = index % BLOCK_SIZE;
+					fixed(uint* ptr = outIndices)
+					{
+						uint* iPtr = ptr + outIndicesIndex;
+						while(count > 0)
+						{
+							int c = CopyIndicesBlock(iPtr, count, blockIndex, blockOffset);
+							count -= c;
+							iPtr += c;
+							blockIndex++;
+							blockOffset = 0;
+						}
+					}
+				}
+
+				private unsafe void AddData(IDrawableData data, Action beforeCmd = null)
+				{
+					currentVertCount = (int)data.VerticesCount;
+					currentIndCount = (int)data.IndicesCount;
+					EnsureCapacity();
+
+					hasIndices = false;
+					data.ProvideIndices(new IndicesContext(addIndicesCallback, false));
+
+					if(!hasIndices) return;
+
+					componentsToMap.Clear();
+					var map = builderVertexMaps[builderIndex];
+					for(int i = 0; i < map.Length; i++)
+					{
+						componentsToMap[task.declaration.Attributes[map[i].Value].Location] = i;
+					}
+					data.ProvideVertices(new VerticesContext(this, false));
+
+					if(hasIndices)
+					{
+						if(componentsToMap.Count > 0)
+						{
+							var declaration = builderDeclarations[builderIndex];
+							var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
+							var stride = builderStruct.GetVertexStride();
+							builderStruct.ProvideVertexData(ptr => {
+								foreach(var p in componentsToMap)
+								{
+									var pair = map[p.Value];
+									CopyComponentData(pair.Value, ptr + declaration.Attributes[pair.Key].Offset, stride);
+								}
+							});
+						}
+
+						beforeCmd?.Invoke();
+						commands.Add(new BuildCommand(BuildCommand.CommandType.DrawIndices, task.indicesCount, (uint)currentIndCount));
+
+						task.verticesCount += (uint)currentVertCount;
+						task.indicesCount += (uint)currentIndCount;
+						currentVertBlock += (vertOffsetLocal + currentVertCount) / BLOCK_SIZE;
+						currentIndBlock += (indOffsetLocal + currentIndCount) / BLOCK_SIZE;
+						vertOffsetLocal = (vertOffsetLocal + currentVertCount) % BLOCK_SIZE;
+						indOffsetLocal = (indOffsetLocal + currentIndCount) % BLOCK_SIZE;
+					}
+				}
+
+				private unsafe void MapUniforms<T>(in T uniformsData) where T : unmanaged, IUniformsData
+				{
+					var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
+					tmpUniformsMap.Clear();
+					task.shader.MapDeclarationInv(uniformsData.GetDeclaration(), tmpUniformsMap);
+					builderStruct.DiffUniforms(uniformsData, uniformsMap, tmpUniformsMap, tmpPairs, this.uniformsData);
+				}
+
+				private void AddMappedUniforms()
+				{
+					foreach(var pair in tmpUniformsMap)
+					{
+						commands.Add(new BuildCommand(BuildCommand.CommandType.OverrideUniform, (uint)pair.Key, (uint)pair.Value));
+					}
+				}
+
+				private unsafe void CopyComponentData(int attribIndex, byte* dataPtr, int stride)
+				{
+					ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
+					int buffStride = task.verticesStride;
+
+					long copyCount = ShaderExtensions.GetTypeSize(vertAttrib.Type) * vertAttrib.Size;
+					long buffOffset = vertOffsetLocal;
+					int countToCopy = currentVertCount;
+
+					int blockIndex = this.currentVertBlock;
+					var currentDataBlock = task.verticesBlocks[blockIndex];
+					if(countToCopy > BLOCK_SIZE - vertOffsetLocal)
+					{
+						int copyLeft = BLOCK_SIZE - vertOffsetLocal;
+						countToCopy -= copyLeft;
+						fixed(byte* ptr = currentDataBlock)
+						{
+							var buffPtr = ptr + buffOffset + vertAttrib.Offset;
+							while(copyLeft > 0)
+							{
+								Buffer.MemoryCopy(dataPtr, buffPtr, copyCount, copyCount);
+								dataPtr += stride;
+								buffPtr += buffStride;
+								copyLeft--;
+							}
+							buffOffset = 0;
+						}
+
+						currentDataBlock = task.verticesBlocks[++blockIndex];
+						int count = countToCopy / BLOCK_SIZE;
+						while(count > 0)
+						{
+							copyLeft = BLOCK_SIZE;
+							fixed(byte* ptr = currentDataBlock)
+							{
+								var buffPtr = ptr + vertAttrib.Offset;
+								while(copyLeft > 0)
+								{
+									Buffer.MemoryCopy(dataPtr, buffPtr, copyCount, copyCount);
+									dataPtr += stride;
+									buffPtr += buffStride;
+									copyLeft--;
+								}
+							}
+
+							currentDataBlock = task.verticesBlocks[++blockIndex];
+							countToCopy -= BLOCK_SIZE;
+							count--;
+						}
+					}
+					if(countToCopy > 0)
+					{
+						fixed(byte* ptr = currentDataBlock)
+						{
+							var buffPtr = ptr + buffOffset + vertAttrib.Offset;
+							while(countToCopy > 0)
+							{
+								Buffer.MemoryCopy(dataPtr, buffPtr, copyCount, copyCount);
+								dataPtr += stride;
+								buffPtr += buffStride;
+								countToCopy--;
+							}
+						}
+					}
+				}
+
+				private unsafe void InsertIndices(uint* indices, bool isDynamic)
+				{
+					if(isDynamic || indices == null) return;
+					hasIndices = true;
+
+					int countToCopy = currentIndCount;
+					uint indicesOffset = task.verticesCount;
+					int blockIndex = currentIndBlock;
+					int blockOffset = indOffsetLocal;
+					while(countToCopy > 0)
+					{
+						int count = AddIndicesBlock(indices, indicesOffset, countToCopy, blockIndex, blockOffset);
+						countToCopy -= count;
+						indices += count;
+						blockIndex++;
+						blockOffset = 0;
+					}
+				}
+
+				private unsafe int AddIndicesBlock(uint* indices, uint offset, int count, int blockIndex, int blockOffset)
+				{
+					var currentDataBlock = indicesBlocks[blockIndex];
+					fixed(uint* ptr = currentDataBlock)
+					{
+						var iPtr = ptr + blockOffset;
+						while(count < 0)
+						{
+							*iPtr = *indices + offset;
+						}
+					}
+					return Math.Min(BLOCK_SIZE - blockOffset, count);
+				}
+
+				private unsafe int CopyIndicesBlock(uint* outIndices, int count, int blockIndex, int blockOffset)
+				{
+					var currentDataBlock = indicesBlocks[blockIndex];
+					int copyCount = Math.Min(BLOCK_SIZE - blockOffset, count);
+					fixed(uint* ptr = currentDataBlock)
+					{
+						Buffer.MemoryCopy(ptr + blockOffset, outIndices, count * 4, copyCount * 4);
+					}
+					return copyCount;
+				}
+
+				private void EnsureCapacity()
+				{
+					if(currentVertCount > BLOCK_SIZE - vertOffsetLocal)
+					{
+						int addBlocks = (currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1;
+						while(addBlocks > 0)
+						{
+							task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
+							addBlocks--;
+						}
+					}
+					if(currentIndCount > BLOCK_SIZE - indOffsetLocal)
+					{
+						int addBlocks = (currentIndCount - (BLOCK_SIZE - indOffsetLocal) - 1) / BLOCK_SIZE + 1;
+						while(addBlocks > 0)
+						{
+							indicesBlocks.Add(new uint[BLOCK_SIZE]);
+							addBlocks--;
+						}
+					}
+				}
+
+				private static int CompareUniformGroups(int aIndex, int bIndex, RefList<int> groupList, int[] compareOrderByUsage)
+				{
+					int len = compareOrderByUsage.Length;
+					for(int i = 0; i < len; i++)
+					{
+						int c = groupList[aIndex + compareOrderByUsage[i]].CompareTo(groupList[bIndex + compareOrderByUsage[i]]);
+						if(c != 0) return c;
+					}
+					return aIndex.CompareTo(bIndex);
+				}
+			}
+
+			[StructLayout(LayoutKind.Sequential, Pack = 4)]
+			private readonly struct BuildCommand
+			{
+				public readonly CommandType type;
+				public readonly uint arg0, arg1;
+
+				public BuildCommand(CommandType type, uint arg0, uint arg1)
+				{
+					this.type = type;
+					this.arg0 = arg0;
+					this.arg1 = arg1;
+				}
+
+				public BuildCommand(CommandType type, uint arg0)
+				{
+					this.type = type;
+					this.arg0 = arg0;
+					this.arg1 = 0;
+				}
+
+				public enum CommandType
+				{
+					DrawIndices,
+					SetBuilder,
+					OverrideUniform
+				}
+			}
+
+			[StructLayout(LayoutKind.Sequential, Pack = 4)]
+			private readonly struct DrawGroup
+			{
+				public readonly int uniformsIndex;
+				public readonly int cmdIndex;
+				public readonly int cmdCount;
+
+				public DrawGroup(int uniformsIndex, int cmdIndex, int cmdCount)
+				{
+					this.uniformsIndex = uniformsIndex;
+					this.cmdIndex = cmdIndex;
+					this.cmdCount = cmdCount;
+				}
+			}
+
+			[StructLayout(LayoutKind.Sequential, Pack = 4)]
+			private readonly struct UniformKey : IEquatable<UniformKey>
+			{
+				public readonly int index;
+				public readonly int buffer;
+
+				public UniformKey(int index, int buffer)
+				{
+					this.index = index;
+					this.buffer = buffer;
+				}
+
+				public override bool Equals(object obj)
+				{
+					return obj is UniformKey key && Equals(key);
+				}
+
+				public bool Equals(UniformKey other)
+				{
+					return index == other.index &&
+						   buffer == other.buffer;
+				}
+
+				public override int GetHashCode()
+				{
+					int hashCode = 187764702;
+					hashCode = hashCode * -1521134295 + index.GetHashCode();
+					hashCode = hashCode * -1521134295 + buffer.GetHashCode();
+					return hashCode;
+				}
+			}
+		}
+	}
+}

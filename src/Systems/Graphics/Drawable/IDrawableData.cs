@@ -7,9 +7,9 @@ namespace PowerOfMind.Graphics.Drawable
 	{
 		EnumDrawMode DrawMode { get; }
 
-		int IndicesCount { get; }
+		uint IndicesCount { get; }
 
-		int VerticesCount { get; }
+		uint VerticesCount { get; }
 
 		int VertexBuffersCount { get; }
 
@@ -24,7 +24,7 @@ namespace PowerOfMind.Graphics.Drawable
 		/// Provide indices to the processor
 		/// </summary>
 		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
-		public unsafe delegate void ProcessorDelegate(int* indices, bool isDynamic);
+		public unsafe delegate void ProcessorDelegate(uint* indices, bool isDynamic);
 
 		public readonly bool ProvideDynamicOnly;
 
@@ -41,7 +41,7 @@ namespace PowerOfMind.Graphics.Drawable
 		/// </summary>
 		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process(int* indices, bool isDynamic)
+		public unsafe void Process(uint* indices, bool isDynamic)
 		{
 			processor(indices, isDynamic);
 		}

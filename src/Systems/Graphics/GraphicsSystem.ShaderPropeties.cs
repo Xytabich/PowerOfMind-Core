@@ -193,7 +193,7 @@ namespace PowerOfMind.Graphics
 					alias = null;
 				}
 				uniforms[i] = new UniformPropertyHandle(GL.GetUniformLocation(handle, name), name, alias,
-					compType, structType, size * compSize, uniformHandlers.TryFindHandler(structType, compType, compSize));
+					compType, structType, size * compSize, compSize, uniformHandlers.TryFindHandler(structType, compType, compSize));
 			}
 			Array.Sort(uniforms, UniformComparer.Instance);//Sort by type to create proper order for textures, e.g. shadows don't work on texture unit 0 for some reason
 			return uniforms;

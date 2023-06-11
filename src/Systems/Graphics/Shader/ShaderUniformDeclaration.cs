@@ -4,7 +4,7 @@ namespace PowerOfMind.Graphics.Shader
 {
 	public readonly struct ShaderUniformDeclaration
 	{
-		private static readonly UniformPropertyHandle DummyHandle = new UniformPropertyHandle(-1, null, null, default, default, default, new DummyHandler());
+		private static readonly UniformPropertyHandle DummyHandle = new UniformPropertyHandle(-1, null, null, default, default, default, default, new DummyHandler());
 
 		public readonly UniformPropertyHandle[] Properties;
 		public readonly IReadOnlyDictionary<int, int> IndexToTextureUnit;

@@ -53,12 +53,37 @@ namespace PowerOfMind.Graphics
 				{
 					if(checkAlias && uniforms[j].Alias == alias || uniforms[j].Name == name)
 					{
-						if(GetTypeSize(declaration.Properties[i].Type) != GetTypeSize(uniforms[j].Type) || declaration.Properties[i].Size != uniforms[j].Size)
+						if(GetTypeSize(declaration.Properties[i].Type) != GetTypeSize(uniforms[j].Type) || declaration.Properties[i].Size > uniforms[j].UniformSize)
 						{
 							throw new Exception("Uniform data structure does not match shader");
 						}
 
 						outMap[i] = j;
+						break;
+					}
+				}
+			}
+		}
+
+		public static void MapDeclarationInv(this IExtendedShaderProgram shader, UniformsDeclaration declaration, IDictionary<int, int> outMap)
+		{
+			var uniforms = shader.Uniforms.Properties;
+			int uniformsCount = uniforms.Length;
+			for(int i = declaration.Properties.Length - 1; i >= 0; i--)
+			{
+				string name = declaration.Properties[i].Name;
+				string alias = declaration.Properties[i].Alias;
+				bool checkAlias = !string.IsNullOrEmpty(alias);
+				for(int j = 0; j < uniformsCount; j++)
+				{
+					if(checkAlias && uniforms[j].Alias == alias || uniforms[j].Name == name)
+					{
+						if(GetTypeSize(declaration.Properties[i].Type) != GetTypeSize(uniforms[j].Type) || declaration.Properties[i].Size > uniforms[j].UniformSize)
+						{
+							throw new Exception("Uniform data structure does not match shader");
+						}
+
+						outMap[j] = i;
 						break;
 					}
 				}

@@ -46,13 +46,13 @@ namespace PowerOfMind.Graphics
 			switch(data.DrawMode)
 			{
 				case EnumDrawMode.Lines:
-					container.drawMode = BeginMode.Lines;
+					container.drawMode = PrimitiveType.Lines;
 					break;
 				case EnumDrawMode.LineStrip:
-					container.drawMode = BeginMode.LineStrip;
+					container.drawMode = PrimitiveType.LineStrip;
 					break;
 				default:
-					container.drawMode = BeginMode.Triangles;
+					container.drawMode = PrimitiveType.Triangles;
 					break;
 			}
 
@@ -167,7 +167,38 @@ namespace PowerOfMind.Graphics
 				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
 			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-			GL.DrawElements(container.drawMode, container.indicesCount, DrawElementsType.UnsignedInt, 0);
+			GL.DrawElements(container.drawMode, (int)container.indicesCount, DrawElementsType.UnsignedInt, 0);
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			for(int i = 0; i < len; i++)
+			{
+				GL.DisableVertexAttribArray(attribPointers[i]);
+			}
+			GL.BindVertexArray(0);
+		}
+
+		public static void RenderDrawable(this IRenderAPI rapi, IDrawableHandle handle, uint indicesOffset, int indicesCount)
+		{
+			RuntimeStats.drawCallsCount++;
+			if(!handle.Initialized)
+			{
+				throw new ArgumentException("Fatal: Trying to render an uninitialized drawable");
+			}
+			if(handle.Disposed)
+			{
+				throw new ArgumentException("Fatal: Trying to render a disposed drawable");
+			}
+
+			var container = (RefContainer)handle;
+			GL.BindVertexArray(container.vao);
+
+			var attribPointers = container.attribPointers;
+			int len = attribPointers.Length;
+			for(int i = 0; i < len; i++)
+			{
+				GL.EnableVertexAttribArray(attribPointers[i]);
+			}
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+			GL.DrawElements(container.drawMode, indicesCount, DrawElementsType.UnsignedInt, (IntPtr)indicesOffset);
 			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
@@ -181,8 +212,8 @@ namespace PowerOfMind.Graphics
 			public int vao, indexBuffer;
 			public int[] vertexBuffers;
 			public int[] attribPointers;
-			public BeginMode drawMode;
-			public int indicesCount;
+			public PrimitiveType drawMode;
+			public uint indicesCount;
 
 			public bool Initialized => vao != 0;
 			public bool Disposed => disposed;
@@ -223,11 +254,11 @@ namespace PowerOfMind.Graphics
 		private class InitVerticesProcessor : VerticesContext.IProcessor
 		{
 			private readonly RefContainer container;
-			private readonly int verticesCount;
+			private readonly uint verticesCount;
 
 			private readonly List<int> attribPointers;
 
-			public InitVerticesProcessor(RefContainer container, int verticesCount, List<int> attribPointers)
+			public InitVerticesProcessor(RefContainer container, uint verticesCount, List<int> attribPointers)
 			{
 				this.container = container;
 				this.verticesCount = verticesCount;
@@ -237,7 +268,7 @@ namespace PowerOfMind.Graphics
 			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(verticesCount * (uint)stride), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
 				var attributes = declaration.Attributes;
 				for(int i = attributes.Length - 1; i >= 0; i--)
 				{
@@ -275,9 +306,9 @@ namespace PowerOfMind.Graphics
 		private class UploadVerticesProcessor : VerticesContext.IProcessor
 		{
 			private readonly RefContainer container;
-			private readonly int verticesCount;
+			private readonly uint verticesCount;
 
-			public UploadVerticesProcessor(RefContainer container, int verticesCount)
+			public UploadVerticesProcessor(RefContainer container, uint verticesCount)
 			{
 				this.container = container;
 				this.verticesCount = verticesCount;
@@ -286,16 +317,16 @@ namespace PowerOfMind.Graphics
 			unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferData(BufferTarget.ArrayBuffer, verticesCount * stride, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(verticesCount * (uint)stride), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
 			}
 		}
 
 		private class UpdateVerticesProcessor : VerticesContext.IProcessor
 		{
 			private readonly RefContainer container;
-			private readonly int verticesCount;
+			private readonly uint verticesCount;
 
-			public UpdateVerticesProcessor(RefContainer container, int verticesCount)
+			public UpdateVerticesProcessor(RefContainer container, uint verticesCount)
 			{
 				this.container = container;
 				this.verticesCount = verticesCount;
@@ -305,17 +336,17 @@ namespace PowerOfMind.Graphics
 			{
 				if(data == null) return;
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, verticesCount * stride, (IntPtr)data);
+				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, (IntPtr)(verticesCount * (uint)stride), (IntPtr)data);
 			}
 		}
 
 		private class UpdatePartialVerticesProcessor : VerticesContext.IProcessor
 		{
 			private readonly RefContainer container;
-			private readonly int verticesCount;
+			private readonly uint verticesCount;
 			private readonly int[] offsets;
 
-			public UpdatePartialVerticesProcessor(RefContainer container, int verticesCount, int[] offsets)
+			public UpdatePartialVerticesProcessor(RefContainer container, uint verticesCount, int[] offsets)
 			{
 				this.container = container;
 				this.verticesCount = verticesCount;
@@ -326,7 +357,7 @@ namespace PowerOfMind.Graphics
 			{
 				if(data == null) return;
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(offsets[bufferIndex] * stride), verticesCount * stride, (IntPtr)data);
+				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(offsets[bufferIndex] * stride), (IntPtr)(verticesCount * (uint)stride), (IntPtr)data);
 			}
 		}
 
@@ -341,26 +372,26 @@ namespace PowerOfMind.Graphics
 				this.offset = offset;
 			}
 
-			public unsafe void Upload(int* data, bool isDynamic)
+			public unsafe void Upload(uint* data, bool isDynamic)
 			{
 				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				GL.BufferData(BufferTarget.ElementArrayBuffer, 4 * container.indicesCount, (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				GL.BufferData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * container.indicesCount), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
 				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			}
 
-			public unsafe void Update(int* data, bool isDynamic)
+			public unsafe void Update(uint* data, bool isDynamic)
 			{
 				if(data == null) return;
 				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, 4 * container.indicesCount, (IntPtr)data);
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, (IntPtr)(4 * container.indicesCount), (IntPtr)data);
 				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			}
 
-			public unsafe void UpdatePartial(int* data, bool isDynamic)
+			public unsafe void UpdatePartial(uint* data, bool isDynamic)
 			{
 				if(data == null) return;
 				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), 4 * container.indicesCount, (IntPtr)data);
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), (IntPtr)(4 * container.indicesCount), (IntPtr)data);
 				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			}
 		}
