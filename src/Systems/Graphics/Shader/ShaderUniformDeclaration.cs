@@ -7,14 +7,12 @@ namespace PowerOfMind.Graphics.Shader
 		private static readonly UniformPropertyHandle DummyHandle = new UniformPropertyHandle(-1, null, null, default, default, default, default, new DummyHandler());
 
 		public readonly UniformPropertyHandle[] Properties;
-		public readonly IReadOnlyDictionary<int, int> IndexToTextureUnit;
 
 		public ref readonly UniformPropertyHandle this[int index] { get { return ref GetPropertyOrDummy(index); } }
 
-		public ShaderUniformDeclaration(UniformPropertyHandle[] properties, IReadOnlyDictionary<int, int> indexToTextureUnit)
+		public ShaderUniformDeclaration(UniformPropertyHandle[] properties)
 		{
 			Properties = properties;
-			IndexToTextureUnit = indexToTextureUnit;
 		}
 
 		public ref readonly UniformPropertyHandle GetPropertyOrDummy(int index)
@@ -25,7 +23,7 @@ namespace PowerOfMind.Graphics.Shader
 
 		private class DummyHandler : IUniformVariableHandler
 		{
-			unsafe void IUniformVariableHandler.SetValue<T>(int location, T* ptr, int count) { }
+			unsafe void IUniformVariableHandler.SetValue<T>(in UniformPropertyHandle handle, T* ptr, int count) { }
 		}
 	}
 }

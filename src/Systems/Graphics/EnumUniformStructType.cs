@@ -42,6 +42,13 @@
 		SamplerCubeMapArrayShadow,
 		IntSamplerCubeMapArray,
 		UnsignedIntSamplerCubeMapArray,
+		Sampler2DMultisample,
+		IntSampler2DMultisample,
+		UnsignedIntSampler2DMultisample,
+		Sampler2DMultisampleArray,
+		IntSampler2DMultisampleArray,
+		UnsignedIntSampler2DMultisampleArray,
+
 		Image1D,
 		Image2D,
 		Image3D,
@@ -75,12 +82,6 @@
 		UnsignedIntImageCubeMapArray,
 		UnsignedIntImage2DMultisample,
 		UnsignedIntImage2DMultisampleArray,
-		Sampler2DMultisample,
-		IntSampler2DMultisample,
-		UnsignedIntSampler2DMultisample,
-		Sampler2DMultisampleArray,
-		IntSampler2DMultisampleArray,
-		UnsignedIntSampler2DMultisampleArray,
 		UnsignedIntAtomicCounter,
 	}
 }

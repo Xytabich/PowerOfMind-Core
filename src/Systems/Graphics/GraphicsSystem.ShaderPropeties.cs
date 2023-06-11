@@ -196,6 +196,56 @@ namespace PowerOfMind.Graphics
 					compType, structType, size * compSize, compSize, uniformHandlers.TryFindHandler(structType, compType, compSize));
 			}
 			Array.Sort(uniforms, UniformComparer.Instance);//Sort by type to create proper order for textures, e.g. shadows don't work on texture unit 0 for some reason
+			int slotCounter = 0;
+			for(int i = 0; i < uniforms.Length; i++)
+			{
+				switch(uniforms[i].StructType)
+				{
+					case EnumUniformStructType.Sampler1D:
+					case EnumUniformStructType.Sampler2D:
+					case EnumUniformStructType.Sampler3D:
+					case EnumUniformStructType.SamplerCube:
+					case EnumUniformStructType.Sampler1DShadow:
+					case EnumUniformStructType.Sampler2DShadow:
+					case EnumUniformStructType.Sampler2DRect:
+					case EnumUniformStructType.Sampler2DRectShadow:
+					case EnumUniformStructType.Sampler1DArray:
+					case EnumUniformStructType.Sampler2DArray:
+					case EnumUniformStructType.SamplerBuffer:
+					case EnumUniformStructType.Sampler1DArrayShadow:
+					case EnumUniformStructType.Sampler2DArrayShadow:
+					case EnumUniformStructType.SamplerCubeShadow:
+					case EnumUniformStructType.IntSampler1D:
+					case EnumUniformStructType.IntSampler2D:
+					case EnumUniformStructType.IntSampler3D:
+					case EnumUniformStructType.IntSamplerCube:
+					case EnumUniformStructType.IntSampler2DRect:
+					case EnumUniformStructType.IntSampler1DArray:
+					case EnumUniformStructType.IntSampler2DArray:
+					case EnumUniformStructType.IntSamplerBuffer:
+					case EnumUniformStructType.UnsignedIntSampler1D:
+					case EnumUniformStructType.UnsignedIntSampler2D:
+					case EnumUniformStructType.UnsignedIntSampler3D:
+					case EnumUniformStructType.UnsignedIntSamplerCube:
+					case EnumUniformStructType.UnsignedIntSampler2DRect:
+					case EnumUniformStructType.UnsignedIntSampler1DArray:
+					case EnumUniformStructType.UnsignedIntSampler2DArray:
+					case EnumUniformStructType.UnsignedIntSamplerBuffer:
+					case EnumUniformStructType.SamplerCubeMapArray:
+					case EnumUniformStructType.SamplerCubeMapArrayShadow:
+					case EnumUniformStructType.IntSamplerCubeMapArray:
+					case EnumUniformStructType.UnsignedIntSamplerCubeMapArray:
+					case EnumUniformStructType.Sampler2DMultisample:
+					case EnumUniformStructType.IntSampler2DMultisample:
+					case EnumUniformStructType.UnsignedIntSampler2DMultisample:
+					case EnumUniformStructType.Sampler2DMultisampleArray:
+					case EnumUniformStructType.IntSampler2DMultisampleArray:
+					case EnumUniformStructType.UnsignedIntSampler2DMultisampleArray:
+						uniforms[i] = uniforms[i].WithReferenceSlot(slotCounter);
+						slotCounter++;
+						break;
+				}
+			}
 			return uniforms;
 		}
 

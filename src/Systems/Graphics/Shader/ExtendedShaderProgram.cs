@@ -156,7 +156,7 @@ namespace PowerOfMind.Graphics.Shader
 		public void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId)
 		{
 			if(uniformIndex < 0) return;
-			BindTexture(uniformIndex, target, textureId, Uniforms.IndexToTextureUnit[uniformIndex]);
+			BindTexture(uniformIndex, target, textureId, Uniforms[uniformIndex].ReferenceSlot);
 		}
 
 		public unsafe void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId, int textureNumber)
@@ -270,54 +270,8 @@ namespace PowerOfMind.Graphics.Shader
 			{
 				if(!string.IsNullOrEmpty(uniforms[i].Name)) uniformNameToIndex[uniforms[i].Name] = i;
 				if(!string.IsNullOrEmpty(uniforms[i].Alias)) uniformAliasToIndex[uniforms[i].Alias] = i;
-
-				switch(uniforms[i].StructType)
-				{
-					case EnumUniformStructType.Sampler1D:
-					case EnumUniformStructType.Sampler2D:
-					case EnumUniformStructType.Sampler3D:
-					case EnumUniformStructType.SamplerCube:
-					case EnumUniformStructType.Sampler1DShadow:
-					case EnumUniformStructType.Sampler2DShadow:
-					case EnumUniformStructType.Sampler2DRect:
-					case EnumUniformStructType.Sampler2DRectShadow:
-					case EnumUniformStructType.Sampler1DArray:
-					case EnumUniformStructType.Sampler2DArray:
-					case EnumUniformStructType.SamplerBuffer:
-					case EnumUniformStructType.Sampler1DArrayShadow:
-					case EnumUniformStructType.Sampler2DArrayShadow:
-					case EnumUniformStructType.SamplerCubeShadow:
-					case EnumUniformStructType.IntSampler1D:
-					case EnumUniformStructType.IntSampler2D:
-					case EnumUniformStructType.IntSampler3D:
-					case EnumUniformStructType.IntSamplerCube:
-					case EnumUniformStructType.IntSampler2DRect:
-					case EnumUniformStructType.IntSampler1DArray:
-					case EnumUniformStructType.IntSampler2DArray:
-					case EnumUniformStructType.IntSamplerBuffer:
-					case EnumUniformStructType.UnsignedIntSampler1D:
-					case EnumUniformStructType.UnsignedIntSampler2D:
-					case EnumUniformStructType.UnsignedIntSampler3D:
-					case EnumUniformStructType.UnsignedIntSamplerCube:
-					case EnumUniformStructType.UnsignedIntSampler2DRect:
-					case EnumUniformStructType.UnsignedIntSampler1DArray:
-					case EnumUniformStructType.UnsignedIntSampler2DArray:
-					case EnumUniformStructType.UnsignedIntSamplerBuffer:
-					case EnumUniformStructType.SamplerCubeMapArray:
-					case EnumUniformStructType.SamplerCubeMapArrayShadow:
-					case EnumUniformStructType.IntSamplerCubeMapArray:
-					case EnumUniformStructType.UnsignedIntSamplerCubeMapArray:
-					case EnumUniformStructType.Sampler2DMultisample:
-					case EnumUniformStructType.IntSampler2DMultisample:
-					case EnumUniformStructType.UnsignedIntSampler2DMultisample:
-					case EnumUniformStructType.Sampler2DMultisampleArray:
-					case EnumUniformStructType.IntSampler2DMultisampleArray:
-					case EnumUniformStructType.UnsignedIntSampler2DMultisampleArray:
-						textureMap[i] = textureMap.Count;
-						break;
-				}
 			}
-			Uniforms = new ShaderUniformDeclaration(uniforms, textureMap);
+			Uniforms = new ShaderUniformDeclaration(uniforms);
 		}
 	}
 }

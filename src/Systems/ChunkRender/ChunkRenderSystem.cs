@@ -1,4 +1,5 @@
-﻿using System;
+﻿using PowerOfMind.Graphics;
+using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 
@@ -10,7 +11,7 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		public override void StartClientSide(ICoreClientAPI api)
 		{
-			ChunkRenderer = new ChunkRenderer(api);
+			ChunkRenderer = new ChunkRenderer(api, api.ModLoader.GetModSystem<GraphicsSystem>());
 		}
 
 		public override void Dispose()

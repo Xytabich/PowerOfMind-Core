@@ -54,13 +54,15 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		private readonly IRenderAPI rapi;
 		private readonly ICoreClientAPI capi;
+		private readonly GraphicsSystem graphics;
 
 		private byte[] dummyBytes = new byte[256];
 
-		public ChunkRenderer(ICoreClientAPI capi)
+		public ChunkRenderer(ICoreClientAPI capi, GraphicsSystem graphics)
 		{
 			this.capi = capi;
 			this.rapi = capi.Render;
+			this.graphics = graphics;
 
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "powerofmindcore:chunkrenderer");
@@ -254,11 +256,7 @@ _fail:
 								uniforms[shader.modelMatrix].SetValue(mat);
 							}
 
-							//uniforms[prog.FindUniformIndex("rgbaLightIn")].SetValue(new float4(1, 1, 1, 1));
-							//uniforms[prog.FindUniformIndex("rgbaTint")].SetValue(new float4(1, 1, 1, 1));
-							//prog.BindTexture2D("tex", capi.BlockTextureAtlas.UnknownTexturePosition.atlasTextureId);
-
-							info.drawer.Render(rapi, uniforms, ref dummyBytes);
+							info.drawer.Render(rapi, graphics, uniforms, ref dummyBytes);
 						}
 					}
 					prog.Stop();
@@ -637,27 +635,45 @@ _fail:
 		[StructLayout(LayoutKind.Sequential, Pack = 4)]
 		private readonly struct GraphicsCommand
 		{
+			public readonly GraphicsCommandType Type;
 			public readonly uint Offset;
 			public readonly uint Count;
-
-			public bool IsRenderCommand => (cmdAndArg & 0x80000000u) == 0;
-			public int Index => (int)(cmdAndArg & 0x7FFFFFFFu);
-
-			private readonly uint cmdAndArg;
+			public readonly uint Index;
+			public readonly uint Arg;
 
 			public GraphicsCommand(uint offset, uint count)
 			{
+				Type = GraphicsCommandType.Draw;
 				Offset = offset;
 				Count = count;
-				cmdAndArg = 0;
+				Index = 0;
+				Arg = 0;
 			}
 
 			public GraphicsCommand(uint offset, uint count, uint index)
 			{
+				Type = GraphicsCommandType.SetUniform;
 				Offset = offset;
 				Count = count;
-				cmdAndArg = 0x80000000u | index;
+				Index = index;
+				Arg = 0;
 			}
+
+			public GraphicsCommand(uint offset, uint count, uint index, EnumTextureTarget target)
+			{
+				Type = GraphicsCommandType.BindTexture;
+				Offset = offset;
+				Count = count;
+				Index = index;
+				Arg = (uint)target;
+			}
+		}
+
+		private enum GraphicsCommandType
+		{
+			Draw,
+			SetUniform,
+			BindTexture
 		}
 
 		[StructLayout(LayoutKind.Sequential, Pack = 4)]
@@ -702,7 +718,7 @@ _fail:
 				drawableHandle.Dispose();
 			}
 
-			public unsafe void Render(IRenderAPI rapi, UniformPropertyHandle[] shaderUniforms, ref byte[] dummyBytes)
+			public unsafe void Render(IRenderAPI rapi, GraphicsSystem graphics, UniformPropertyHandle[] shaderUniforms, ref byte[] dummyBytes)
 			{
 				if(dummyBytes.Length < maxUniformSize)
 				{
@@ -717,13 +733,19 @@ _fail:
 						for(int i = 0; i < len; i++)
 						{
 							var cmd = commands[i];
-							if(cmd.IsRenderCommand)
+							switch(cmd.Type)
 							{
-								rapi.RenderDrawable(drawableHandle, cmd.Offset, (int)cmd.Count);
-							}
-							else
-							{
-								shaderUniforms[uniformsMap[cmd.Index].Index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
+								case GraphicsCommandType.Draw:
+									rapi.RenderDrawable(drawableHandle, cmd.Offset, (int)cmd.Count);
+									break;
+								case GraphicsCommandType.SetUniform:
+									shaderUniforms[uniformsMap[cmd.Index].Index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
+									break;
+								case GraphicsCommandType.BindTexture:
+									ref readonly var shaderUniform = ref shaderUniforms[uniformsMap[cmd.Index].Index];
+									shaderUniform.SetValue(shaderUniform.ReferenceSlot);
+									graphics.BindTexture((EnumTextureTarget)cmd.Arg, *(int*)(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset)), shaderUniform.ReferenceSlot, 0, false);
+									break;
 							}
 						}
 

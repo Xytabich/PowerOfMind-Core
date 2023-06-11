@@ -46,6 +46,7 @@ namespace PowerOfMind.Graphics
 			{
 				switch(structType)
 				{
+					case EnumUniformStructType.Primitive:
 					case EnumUniformStructType.Vector:
 					case EnumUniformStructType.SquareMatrix:
 					case EnumUniformStructType.ColumnMatrix:
@@ -65,7 +66,7 @@ namespace PowerOfMind.Graphics
 				return null;
 			}
 
-			private unsafe class UniformVariableHandlerBase
+			private class UniformVariableHandlerBase
 			{
 				public readonly EnumUniformStructType structType;
 				public readonly EnumShaderPrimitiveType primitiveType;
@@ -79,7 +80,7 @@ namespace PowerOfMind.Graphics
 				}
 			}
 
-			private unsafe class UniformVariableHandler<T> : UniformVariableHandlerBase, IUniformVariableHandler where T : unmanaged
+			private class UniformVariableHandler<T> : UniformVariableHandlerBase, IUniformVariableHandler where T : unmanaged
 			{
 				private readonly SetValueCallback setValue;
 
@@ -88,15 +89,15 @@ namespace PowerOfMind.Graphics
 					this.setValue = setValue;
 				}
 
-				unsafe void IUniformVariableHandler.SetValue<T0>(int location, T0* ptr, int count)
+				void IUniformVariableHandler.SetValue<T0>(in UniformPropertyHandle handle, T0* ptr, int count)
 				{
-					setValue(location, count, (T*)ptr);
+					setValue(handle.Location, count, (T*)ptr);
 				}
 
 				public delegate void SetValueCallback(int location, int count, T* value);
 			}
 
-			private unsafe class UniformMatrixHandler<T> : UniformVariableHandlerBase, IUniformVariableHandler where T : unmanaged
+			private class UniformMatrixHandler<T> : UniformVariableHandlerBase, IUniformVariableHandler where T : unmanaged
 			{
 				private readonly SetValueCallback setValue;
 
@@ -105,9 +106,9 @@ namespace PowerOfMind.Graphics
 					this.setValue = setValue;
 				}
 
-				unsafe void IUniformVariableHandler.SetValue<T0>(int location, T0* ptr, int count)
+				void IUniformVariableHandler.SetValue<T0>(in UniformPropertyHandle handle, T0* ptr, int count)
 				{
-					setValue(location, count, false, (T*)ptr);
+					setValue(handle.Location, count, false, (T*)ptr);
 				}
 
 				public delegate void SetValueCallback(int location, int count, bool transpose, T* value);

@@ -48,9 +48,8 @@ namespace PowerOfMind.Systems.ChunkRender
 			{
 				try
 				{
-					var context = new BuilderContext(this, verticesStride);
-
-					context.InitDeclaration();
+					var context = new BuilderContext(this);
+					context.Init();
 
 					for(int i = 0; i < builders.Length; i++)
 					{
@@ -115,7 +114,6 @@ namespace PowerOfMind.Systems.ChunkRender
 				public VertexDeclaration[] builderDeclarations;
 
 				private readonly BuildTask task;
-				private readonly int verticesStride;
 
 				private readonly List<BuildCommand> commands = new List<BuildCommand>();
 				private readonly List<uint[]> indicesBlocks = new List<uint[]>();
@@ -136,19 +134,15 @@ namespace PowerOfMind.Systems.ChunkRender
 
 				private readonly Action addMappedUniformsCallback;
 
-				public unsafe BuilderContext(BuildTask task, int verticesStride)
+				public unsafe BuilderContext(BuildTask task)
 				{
 					this.task = task;
-					this.verticesStride = verticesStride;
-
-					task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
-					indicesBlocks.Add(new uint[BLOCK_SIZE]);
 
 					addIndicesCallback = InsertIndices;
 					addMappedUniformsCallback = AddMappedUniforms;
 				}
 
-				public void InitDeclaration()
+				public void Init()
 				{
 					var builders = task.builders;
 					this.builderVertexMaps = new KeyValuePair<int, int>[builders.Length][];
@@ -188,6 +182,10 @@ namespace PowerOfMind.Systems.ChunkRender
 							}
 							tmpMap.Add(new KeyValuePair<int, int>(j, index));
 						}
+						if(vertStride == 0)
+						{
+							throw new Exception(string.Format("Builder {0} has no vertex attributes associated with the shader", task.container.builders[builders[i]].builder));
+						}
 
 						builderVertexMaps[i] = tmpMap.ToArray();
 						tmpMap.Clear();
@@ -211,6 +209,9 @@ namespace PowerOfMind.Systems.ChunkRender
 
 					task.declaration = new VertexDeclaration(attributes.ToArray());
 					task.verticesStride = vertStride;
+
+					task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
+					indicesBlocks.Add(new uint[BLOCK_SIZE]);
 				}
 
 				public void SetBuilder(int builderIndex)
@@ -349,8 +350,76 @@ namespace PowerOfMind.Systems.ChunkRender
 
 								var block = this.uniformsData.blocks[currentUniforms[j]];
 								var uniformIndex = pointers[uniformsMap[j]].Index;
-								list.Add(new GraphicsCommand((uint)block.offset, (uint)(block.size /
-									(shaderUniforms[uniformIndex].StructSize * ShaderExtensions.GetTypeSize(shaderUniforms[uniformIndex].Type))), (uint)uniformsMap[j]));
+
+								var count = (uint)(block.size / (shaderUniforms[uniformIndex].StructSize * ShaderExtensions.GetTypeSize(shaderUniforms[uniformIndex].Type)));
+								switch(shaderUniforms[uniformIndex].StructType)
+								{
+									case EnumUniformStructType.Sampler1D:
+									case EnumUniformStructType.Sampler1DShadow:
+									case EnumUniformStructType.IntSampler1D:
+									case EnumUniformStructType.UnsignedIntSampler1D:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture1D));
+										break;
+									case EnumUniformStructType.Sampler2D:
+									case EnumUniformStructType.Sampler2DShadow:
+									case EnumUniformStructType.IntSampler2D:
+									case EnumUniformStructType.UnsignedIntSampler2D:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2D));
+										break;
+									case EnumUniformStructType.Sampler3D:
+									case EnumUniformStructType.IntSampler3D:
+									case EnumUniformStructType.UnsignedIntSampler3D:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture3D));
+										break;
+									case EnumUniformStructType.Sampler2DRect:
+									case EnumUniformStructType.Sampler2DRectShadow:
+									case EnumUniformStructType.IntSampler2DRect:
+									case EnumUniformStructType.UnsignedIntSampler2DRect:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureRectangle));
+										break;
+									case EnumUniformStructType.SamplerCube:
+									case EnumUniformStructType.SamplerCubeShadow:
+									case EnumUniformStructType.IntSamplerCube:
+									case EnumUniformStructType.UnsignedIntSamplerCube:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureCubeMap));
+										break;
+									case EnumUniformStructType.Sampler1DArray:
+									case EnumUniformStructType.Sampler1DArrayShadow:
+									case EnumUniformStructType.IntSampler1DArray:
+									case EnumUniformStructType.UnsignedIntSampler1DArray:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture1DArray));
+										break;
+									case EnumUniformStructType.Sampler2DArray:
+									case EnumUniformStructType.Sampler2DArrayShadow:
+									case EnumUniformStructType.IntSampler2DArray:
+									case EnumUniformStructType.UnsignedIntSampler2DArray:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DArray));
+										break;
+									case EnumUniformStructType.SamplerBuffer:
+									case EnumUniformStructType.IntSamplerBuffer:
+									case EnumUniformStructType.UnsignedIntSamplerBuffer:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureBuffer));
+										break;
+									case EnumUniformStructType.SamplerCubeMapArray:
+									case EnumUniformStructType.SamplerCubeMapArrayShadow:
+									case EnumUniformStructType.IntSamplerCubeMapArray:
+									case EnumUniformStructType.UnsignedIntSamplerCubeMapArray:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureCubeMapArray));
+										break;
+									case EnumUniformStructType.Sampler2DMultisample:
+									case EnumUniformStructType.IntSampler2DMultisample:
+									case EnumUniformStructType.UnsignedIntSampler2DMultisample:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DMultisample));
+										break;
+									case EnumUniformStructType.Sampler2DMultisampleArray:
+									case EnumUniformStructType.IntSampler2DMultisampleArray:
+									case EnumUniformStructType.UnsignedIntSampler2DMultisampleArray:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DMultisampleArray));
+										break;
+									default:
+										list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j]));
+										break;
+								}
 							}
 						}
 						for(int j = 0; j < drawGroup.cmdCount; j++)
@@ -580,15 +649,18 @@ namespace PowerOfMind.Systems.ChunkRender
 				private unsafe int AddIndicesBlock(uint* indices, uint offset, int count, int blockIndex, int blockOffset)
 				{
 					var currentDataBlock = indicesBlocks[blockIndex];
+					int countToCopy = Math.Min(BLOCK_SIZE - blockOffset, count);
 					fixed(uint* ptr = currentDataBlock)
 					{
 						var iPtr = ptr + blockOffset;
-						while(count < 0)
+						for(int i = 0; i < countToCopy; i++)
 						{
 							*iPtr = *indices + offset;
+							indices++;
+							iPtr++;
 						}
 					}
-					return Math.Min(BLOCK_SIZE - blockOffset, count);
+					return countToCopy;
 				}
 
 				private unsafe int CopyIndicesBlock(uint* outIndices, int count, int blockIndex, int blockOffset)
@@ -609,7 +681,7 @@ namespace PowerOfMind.Systems.ChunkRender
 						int addBlocks = (currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1;
 						while(addBlocks > 0)
 						{
-							task.verticesBlocks.Add(new byte[verticesStride * BLOCK_SIZE]);
+							task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
 							addBlocks--;
 						}
 					}

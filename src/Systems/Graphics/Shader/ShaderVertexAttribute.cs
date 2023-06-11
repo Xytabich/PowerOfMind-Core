@@ -16,5 +16,10 @@
 			Type = type;
 			Size = size;
 		}
+
+		public override string ToString()
+		{
+			return string.Format("{0}: {1} {2}({3})", Location, string.Format(string.IsNullOrEmpty(Alias) ? "{0}" : "{0}[{1}]", Name, Alias), Type, Size);
+		}
 	}
 }
