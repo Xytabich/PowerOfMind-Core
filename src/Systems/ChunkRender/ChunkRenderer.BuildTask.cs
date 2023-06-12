@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
 namespace PowerOfMind.Systems.ChunkRender
@@ -76,7 +77,9 @@ namespace PowerOfMind.Systems.ChunkRender
 				catch(Exception e)
 				{
 					failed = true;
-					//TODO: log exception
+					var msg = string.Format("Exception while trying to build a chunk grid:\n{0}", e);
+					var capi = container.capi;
+					capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:chunkbuildlog");
 				}
 
 				container.completedTasks.Add(this);
@@ -173,10 +176,17 @@ namespace PowerOfMind.Systems.ChunkRender
 							{
 								if(declaration.Attributes[j].Size != attributes[index].Size || declaration.Attributes[j].Type != attributes[index].Type)
 								{
-									//TODO: log error
-									//logger.LogWarning("Vertex component {0} of builder {1} does not match size or type with other users of this shader. {2}({3}) was expected but {4}({5}) was provided.",
-									//	string.Format(string.IsNullOrEmpty(declaration.Attributes[j].Alias) ? "`{0}`" : "`{0}`[{1}]", declaration.Attributes[j].Name, declaration.Attributes[j].Alias),
-									//	builders[i], attributes[index].Type, attributes[index].Size, declaration.Attributes[j].Type, declaration.Attributes[j].Size);
+									var msg = string.Format(
+										"Vertex component {0} of builder {1} does not match size or type with other users of this shader. {2}({3}) was expected but {4}({5}) was provided.",
+										string.Format(string.IsNullOrEmpty(declaration.Attributes[j].Alias) ? "`{0}`" : "`{0}`[{1}]", declaration.Attributes[j].Name, declaration.Attributes[j].Alias),
+										builders[i],
+										attributes[index].Type,
+										attributes[index].Size,
+										declaration.Attributes[j].Type,
+										declaration.Attributes[j].Size
+									);
+									var capi = task.container.capi;
+									capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:chunkbuildlog");
 									continue;
 								}
 							}

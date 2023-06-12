@@ -1,6 +1,5 @@
 ﻿using PowerOfMind.Collections;
 using PowerOfMind.Graphics;
-using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Concurrent;
@@ -13,7 +12,7 @@ using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public partial class ChunkRenderer : IRenderer//TODO: subscribe to shader reload event & rebuild all chunks
+	public partial class ChunkRenderer : IRenderer
 	{
 		double IRenderer.RenderOrder => 0.35;
 		int IRenderer.RenderRange => 0;
@@ -66,6 +65,7 @@ namespace PowerOfMind.Systems.ChunkRender
 
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "powerofmindcore:chunkrenderer");
+			graphics.OnReloadShaders += ReloadAll;
 		}
 
 		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IChunkBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
@@ -156,6 +156,28 @@ namespace PowerOfMind.Systems.ChunkRender
 					}
 				}
 			}
+		}
+
+		private bool ReloadAll()
+		{
+			foreach(var pair in shaderToId)
+			{
+				ref readonly var shader = ref shaders[pair.Value];
+				if(shader.shaderChunksChain >= 0)
+				{
+					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
+					{
+						ref var info = ref chunkShaders[chunk.chunkShaderId];
+						if(info.drawer != null)
+						{
+							info.drawer.Dispose();
+							info.drawer = null;
+						}
+						rebuildStructs.Add(chunk.chunkShaderId);
+					}
+				}
+			}
+			return true;
 		}
 
 		private int AddShader(IExtendedShaderProgram shader)
