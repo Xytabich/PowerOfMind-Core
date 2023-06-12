@@ -1,109 +1,19 @@
 ﻿using PowerOfMind.Collections;
 using PowerOfMind.Graphics;
 using PowerOfMind.Graphics.Drawable;
-using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public partial class ChunkRenderer
+	public partial class ChunkBatchRender
 	{
-		private class BuildTask
+		private partial class BuildTask
 		{
-			public const int BLOCK_SIZE = 1024;
-
-			public bool failed = false;
-
-			public readonly int[] builders;
-			public readonly int version;
-			public readonly int chunkShaderId;
-			public GraphicsCommand[] commands;
-			public UniformPointer[] uniformsMap;
-			public byte[] uniformsData;
-
-			public uint verticesCount;
-			public uint indicesCount;
-			public int verticesStride;
-			public VertexDeclaration declaration;
-			public readonly List<byte[]> verticesBlocks = new List<byte[]>();
-			public uint[] indices;
-
-			private readonly IExtendedShaderProgram shader;
-			private readonly ChunkRenderer container;
-
-			public BuildTask(ChunkRenderer container, IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
-			{
-				this.container = container;
-				this.shader = shader;
-				this.builders = builders;
-				this.version = version;
-				this.chunkShaderId = chunkShaderId;
-			}
-
-			public void Run()
-			{
-				try
-				{
-					var context = new BuilderContext(this);
-					context.Init();
-
-					for(int i = 0; i < builders.Length; i++)
-					{
-						context.SetBuilder(i);
-
-						var builderStruct = container.builders[builders[i]].builderStruct;
-						var builder = container.builders[builders[i]].builder;
-
-						context.uniformsMap.Clear();
-						shader.MapDeclarationInv(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
-						foreach(var pair in context.uniformsMap)
-						{
-							if(!context.uniformToIndexMap.ContainsKey(pair.Key))
-							{
-								context.uniformToIndexMap[pair.Key] = context.uniformToIndexMap.Count;
-							}
-						}
-
-						builder.Build(context);
-					}
-
-					context.BuildCommands(out commands, out indices, out uniformsData, out uniformsMap);
-				}
-				catch(Exception e)
-				{
-					failed = true;
-					var msg = string.Format("Exception while trying to build a chunk grid:\n{0}", e);
-					var capi = container.capi;
-					capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:chunkbuildlog");
-				}
-
-				container.completedTasks.Add(this);
-			}
-
-			private static void AddAttrib(ref int byteOffset, VertexAttribute[] attributes, int attribIndex, RefList<VertexAttribute> outAttribs)
-			{
-				ref readonly var attrib = ref attributes[attribIndex];
-				outAttribs.Add(new VertexAttribute(
-					attrib.Name,
-					attrib.Alias,
-					attrib.Location,
-					0,
-					(uint)byteOffset,
-					0,
-					attrib.Size,
-					attrib.Type,
-					attrib.Normalized,
-					attrib.IntegerTarget
-				));
-				byteOffset += (int)attrib.Size * ShaderExtensions.GetTypeSize(attrib.Type);
-			}
-
-			private class BuilderContext : IChunkBuilderContext, VerticesContext.IProcessor
+			private class BuilderContext : IBatchBuildContext, VerticesContext.IProcessor
 			{
 				public int vertOffsetLocal = 0;
 				public int indOffsetLocal = 0;
@@ -230,7 +140,8 @@ namespace PowerOfMind.Systems.ChunkRender
 					this.commands.Add(new BuildCommand(BuildCommand.CommandType.SetBuilder, (uint)builderIndex));
 				}
 
-				public void BuildCommands(out GraphicsCommand[] commands, out uint[] indices, out byte[] uniformsData, out UniformPointer[] uniformPointers)
+				public void BuildCommands(out GraphicsCommand[] commands, out uint[] indices, out byte[] uniformsData,
+					out UniformPointer[] uniformPointers, out RenderPassGroup[] renderPasses)
 				{
 					int uniformsCount = uniformToIndexMap.Count;
 					var currentUniforms = new int[uniformsCount];
@@ -246,6 +157,7 @@ namespace PowerOfMind.Systems.ChunkRender
 					int drawUniformGroup = 0;
 					int drawStartIndex = 0;
 					int drawCount = 0;
+					var renderPass = EnumChunkRenderPass.Opaque;
 					IBuilderStructContainer currentStruct = null;
 					for(int i = 0; i < this.commands.Count; i++)
 					{
@@ -255,7 +167,7 @@ namespace PowerOfMind.Systems.ChunkRender
 								if(!firstDraw)
 								{
 									firstDraw = true;
-									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount, renderPass));
 									drawCount = 0;
 								}
 								currentStruct = task.container.builders[task.builders[this.commands[i].arg0]].builderStruct;
@@ -267,11 +179,23 @@ namespace PowerOfMind.Systems.ChunkRender
 								if(!firstDraw)
 								{
 									firstDraw = true;
-									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount, renderPass));
 									drawCount = 0;
 								}
 								tmpUniformsMap.Remove((int)this.commands[i].arg0);
 								currentUniforms[uniformToIndexMap[(int)this.commands[i].arg0]] = (int)this.commands[i].arg1;
+								break;
+							case BuildCommand.CommandType.SetPass:
+								if(renderPass != (EnumChunkRenderPass)this.commands[i].arg0)
+								{
+									if(!firstDraw)
+									{
+										firstDraw = true;
+										drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount, renderPass));
+										drawCount = 0;
+									}
+									renderPass = (EnumChunkRenderPass)this.commands[i].arg0;
+								}
 								break;
 							case BuildCommand.CommandType.DrawIndices:
 								if(firstDraw)
@@ -306,7 +230,7 @@ namespace PowerOfMind.Systems.ChunkRender
 					}
 					if(!firstDraw)
 					{
-						drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount));
+						drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount, renderPass));
 					}
 
 					var pointers = new List<UniformPointer>();
@@ -332,16 +256,47 @@ namespace PowerOfMind.Systems.ChunkRender
 						if(c != 0) return c;
 						return a.CompareTo(b);
 					});
-					drawGroups.Sort((a, b) => CompareUniformGroups(a.uniformsIndex, b.uniformsIndex, uniformsPerDrawGroup, compareOrderByUsage));
+					drawGroups.Sort((a, b) => {
+						int c = a.renderPass.CompareTo(b.renderPass);
+						if(c != 0) return c;
+						return CompareUniformGroups(a.uniformsIndex, b.uniformsIndex, uniformsPerDrawGroup, compareOrderByUsage);
+					});
 
 					indices = new uint[task.indicesCount];
 					var list = new List<GraphicsCommand>();
+					var rpGroups = new List<RenderPassGroup>();
 					currentUniforms.Fill(-1);
+					renderPass = EnumChunkRenderPass.Opaque;
+					int renderPassGroupStart = 0;
 					uint indicesCount = 0;
 					uint indicesStart = 0;
 					for(int i = 0; i < drawGroups.Count; i++)
 					{
 						var drawGroup = drawGroups[i];
+
+						if(renderPass != drawGroup.renderPass)
+						{
+							if(indicesCount > 0)
+							{
+								list.Add(new GraphicsCommand(indicesStart, indicesCount));
+								indicesStart += indicesCount;
+								indicesCount = 0;
+							}
+
+							if(renderPassGroupStart < list.Count)
+							{
+								rpGroups.Add(new RenderPassGroup(renderPass, renderPassGroupStart, list.Count - renderPassGroupStart));
+
+								renderPassGroupStart = list.Count;
+							}
+
+							for(int j = 0; j < uniformsCount; j++)
+							{
+								currentUniforms[j] = -1;
+							}
+
+							renderPass = drawGroup.renderPass;
+						}
 						for(int j = 0; j < uniformsCount; j++)
 						{
 							if(uniformsPerDrawGroup[j + drawGroup.uniformsIndex] != currentUniforms[j])
@@ -444,25 +399,26 @@ namespace PowerOfMind.Systems.ChunkRender
 					commands = list.ToArray();
 					uniformsData = this.uniformsData.dataBuffer.ToArray();
 					uniformPointers = pointers.ToArray();
+					renderPasses = rpGroups.ToArray();
 				}
 
-				unsafe void IChunkBuilderContext.AddData(IDrawableData data)
+				unsafe void IBatchBuildContext.AddData(IDrawableData data, EnumChunkRenderPass renderPass)
 				{
 					if(data.DrawMode != EnumDrawMode.Triangles) throw new InvalidOperationException("Only triangles are allowed here");
-					AddData(data);
+					AddData(data, renderPass);
 				}
 
-				unsafe void IChunkBuilderContext.AddData<T>(IDrawableData data, in T uniformsData)
+				unsafe void IBatchBuildContext.AddData<T>(IDrawableData data, in T uniformsData, EnumChunkRenderPass renderPass)
 				{
 					if(data.DrawMode != EnumDrawMode.Triangles) throw new InvalidOperationException("Only triangles are allowed here");
 					MapUniforms(uniformsData);
 					if(tmpUniformsMap.Count > 0)
 					{
-						AddData(data, addMappedUniformsCallback);
+						AddData(data, renderPass, addMappedUniformsCallback);
 					}
 					else
 					{
-						AddData(data);
+						AddData(data, renderPass);
 					}
 				}
 
@@ -505,7 +461,7 @@ namespace PowerOfMind.Systems.ChunkRender
 					}
 				}
 
-				private unsafe void AddData(IDrawableData data, Action beforeCmd = null)
+				private unsafe void AddData(IDrawableData data, EnumChunkRenderPass renderPass, Action beforeCmd = null)
 				{
 					currentVertCount = (int)data.VerticesCount;
 					currentIndCount = (int)data.IndicesCount;
@@ -539,6 +495,8 @@ namespace PowerOfMind.Systems.ChunkRender
 								}
 							});
 						}
+
+						commands.Add(new BuildCommand(BuildCommand.CommandType.SetPass, (uint)renderPass));
 
 						beforeCmd?.Invoke();
 						commands.Add(new BuildCommand(BuildCommand.CommandType.DrawIndices, task.indicesCount, (uint)currentIndCount));
@@ -712,81 +670,6 @@ namespace PowerOfMind.Systems.ChunkRender
 						if(c != 0) return c;
 					}
 					return aIndex.CompareTo(bIndex);
-				}
-			}
-
-			[StructLayout(LayoutKind.Sequential, Pack = 4)]
-			private readonly struct BuildCommand
-			{
-				public readonly CommandType type;
-				public readonly uint arg0, arg1;
-
-				public BuildCommand(CommandType type, uint arg0, uint arg1)
-				{
-					this.type = type;
-					this.arg0 = arg0;
-					this.arg1 = arg1;
-				}
-
-				public BuildCommand(CommandType type, uint arg0)
-				{
-					this.type = type;
-					this.arg0 = arg0;
-					this.arg1 = 0;
-				}
-
-				public enum CommandType
-				{
-					DrawIndices,
-					SetBuilder,
-					OverrideUniform
-				}
-			}
-
-			[StructLayout(LayoutKind.Sequential, Pack = 4)]
-			private readonly struct DrawGroup
-			{
-				public readonly int uniformsIndex;
-				public readonly int cmdIndex;
-				public readonly int cmdCount;
-
-				public DrawGroup(int uniformsIndex, int cmdIndex, int cmdCount)
-				{
-					this.uniformsIndex = uniformsIndex;
-					this.cmdIndex = cmdIndex;
-					this.cmdCount = cmdCount;
-				}
-			}
-
-			[StructLayout(LayoutKind.Sequential, Pack = 4)]
-			private readonly struct UniformKey : IEquatable<UniformKey>
-			{
-				public readonly int index;
-				public readonly int buffer;
-
-				public UniformKey(int index, int buffer)
-				{
-					this.index = index;
-					this.buffer = buffer;
-				}
-
-				public override bool Equals(object obj)
-				{
-					return obj is UniformKey key && Equals(key);
-				}
-
-				public bool Equals(UniformKey other)
-				{
-					return index == other.index &&
-						   buffer == other.buffer;
-				}
-
-				public override int GetHashCode()
-				{
-					int hashCode = 187764702;
-					hashCode = hashCode * -1521134295 + index.GetHashCode();
-					hashCode = hashCode * -1521134295 + buffer.GetHashCode();
-					return hashCode;
 				}
 			}
 		}

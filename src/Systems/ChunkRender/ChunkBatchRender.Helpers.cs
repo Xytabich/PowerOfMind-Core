@@ -8,7 +8,7 @@ using XXHash;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public partial class ChunkRenderer
+	public partial class ChunkBatchRender
 	{
 		private class UniformsDataCollection
 		{

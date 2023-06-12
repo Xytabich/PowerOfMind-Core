@@ -12,7 +12,7 @@ using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public partial class ChunkRenderer : IRenderer
+	public partial class ChunkBatchRender : IRenderer
 	{
 		double IRenderer.RenderOrder => 0.35;
 		int IRenderer.RenderRange => 0;
@@ -57,7 +57,7 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		private byte[] dummyBytes = new byte[256];
 
-		public ChunkRenderer(ICoreClientAPI capi, GraphicsSystem graphics)
+		public ChunkBatchRender(ICoreClientAPI capi, GraphicsSystem graphics)
 		{
 			this.capi = capi;
 			this.rapi = capi.Render;
@@ -68,7 +68,7 @@ namespace PowerOfMind.Systems.ChunkRender
 			graphics.OnReloadShaders += ReloadAll;
 		}
 
-		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IChunkBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
+		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IBatchDataBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
 			where TVertex : unmanaged, IVertexStruct
 			where TUniform : unmanaged, IUniformsData
 		{
@@ -135,8 +135,8 @@ namespace PowerOfMind.Systems.ChunkRender
 				case EnumRenderStage.Before:
 					Update();
 					break;
-				case EnumRenderStage.Opaque:
-					if(shaders.Count > 0) RenderStage(stage);
+				case EnumRenderStage.Opaque://TODO: add another passes
+					if(shaders.Count > 0) RenderStage(EnumChunkRenderPass.Opaque);
 					break;
 			}
 		}
@@ -224,7 +224,7 @@ _fail:
 			throw new Exception("Invalid shader, shader must contain projection and view matrices as well as model matrix or origin position.");
 		}
 
-		private void RenderStage(EnumRenderStage stage)
+		private void RenderStage(EnumChunkRenderPass pass)
 		{
 			rapi.GLDepthMask(true);
 			rapi.GLEnableDepthTest();
@@ -258,27 +258,31 @@ _fail:
 						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
 						if(info.drawer != null)
 						{
-							var origin = chunks[chunk.chunkId].origin;
-
-							if(shader.originPos >= 0)
+							int passIndex = info.drawer.TryGetPassIndex(pass);
+							if(passIndex >= 0)
 							{
-								if(shader.modelMatrix >= 0)
+								var origin = chunks[chunk.chunkId].origin;
+
+								if(shader.originPos >= 0)
 								{
-									uniforms[shader.modelMatrix].SetValue(float4x4.identity);
+									if(shader.modelMatrix >= 0)
+									{
+										uniforms[shader.modelMatrix].SetValue(float4x4.identity);
+									}
+
+									uniforms[shader.originPos].SetValue(
+										new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z)));
+								}
+								else
+								{
+									var mat = new float[16];
+									Mat4f.Identity(mat);
+									Mat4f.Translate(mat, mat, (float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z));
+									uniforms[shader.modelMatrix].SetValue(mat);
 								}
 
-								uniforms[shader.originPos].SetValue(
-									new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z)));
+								info.drawer.Render(rapi, passIndex, graphics, uniforms, ref dummyBytes);
 							}
-							else
-							{
-								var mat = new float[16];
-								Mat4f.Identity(mat);
-								Mat4f.Translate(mat, mat, (float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z));
-								uniforms[shader.modelMatrix].SetValue(mat);
-							}
-
-							info.drawer.Render(rapi, graphics, uniforms, ref dummyBytes);
 						}
 					}
 					prog.Stop();
@@ -381,7 +385,7 @@ _fail:
 						rapi.UpdateDrawable(drawableHandle, chunkDataHelper);
 					}
 				}
-				chunkShader.drawer = new ChunkPartDrawer(drawableHandle, task.commands, task.uniformsMap, task.uniformsData);
+				chunkShader.drawer = new ChunkPartDrawer(drawableHandle, task.renderPasses, task.commands, task.uniformsMap, task.uniformsData);
 
 				chunkDataHelper.Clear();
 			}
@@ -591,14 +595,14 @@ _fail:
 
 		private struct BuilderInfo
 		{
-			public readonly IChunkBuilder builder;
+			public readonly IBatchDataBuilder builder;
 			public readonly IBuilderStructContainer builderStruct;
 			public readonly int chunkId;
 			public readonly int chunkShaderId;
 
 			public int usageCounter;
 
-			public BuilderInfo(int chunkId, IChunkBuilder builder, IBuilderStructContainer builderStruct, int chunkShaderId)
+			public BuilderInfo(int chunkId, IBatchDataBuilder builder, IBuilderStructContainer builderStruct, int chunkShaderId)
 			{
 				this.chunkId = chunkId;
 				this.builder = builder;
@@ -713,17 +717,34 @@ _fail:
 			}
 		}
 
+		[StructLayout(LayoutKind.Sequential, Pack = 4)]
+		private readonly struct RenderPassGroup
+		{
+			public readonly EnumChunkRenderPass RenderPass;
+			public readonly int Index;
+			public readonly int Count;
+
+			public RenderPassGroup(EnumChunkRenderPass renderPass, int index, int count)
+			{
+				RenderPass = renderPass;
+				Index = index;
+				Count = count;
+			}
+		}
+
 		private class ChunkPartDrawer
 		{
 			public readonly IDrawableHandle drawableHandle;
+			private readonly RenderPassGroup[] renderPasses;
 			private readonly GraphicsCommand[] commands;
 			private readonly UniformPointer[] uniformsMap;
 			private readonly byte[] uniformsData;
 			private readonly int maxUniformSize;
 
-			public ChunkPartDrawer(IDrawableHandle drawableHandle, GraphicsCommand[] commands, UniformPointer[] uniformsMap, byte[] uniformsData)
+			public ChunkPartDrawer(IDrawableHandle drawableHandle, RenderPassGroup[] renderPasses, GraphicsCommand[] commands, UniformPointer[] uniformsMap, byte[] uniformsData)
 			{
 				this.drawableHandle = drawableHandle;
+				this.renderPasses = renderPasses;
 				this.commands = commands;
 				this.uniformsMap = uniformsMap;
 				this.uniformsData = uniformsData;
@@ -740,7 +761,34 @@ _fail:
 				drawableHandle.Dispose();
 			}
 
-			public unsafe void Render(IRenderAPI rapi, GraphicsSystem graphics, UniformPropertyHandle[] shaderUniforms, ref byte[] dummyBytes)
+			public int TryGetPassIndex(EnumChunkRenderPass renderPass)
+			{
+				int lo = 0;
+				int hi = renderPasses.Length - 1;
+				while(lo <= hi)
+				{
+					int i = lo + ((hi - lo) >> 1);
+					int order = renderPasses[i].RenderPass.CompareTo(renderPass);
+
+					if(order == 0)
+					{
+						return i;
+					}
+
+					if(order < 0)
+					{
+						lo = i + 1;
+					}
+					else
+					{
+						hi = i - 1;
+					}
+				}
+
+				return -1;
+			}
+
+			public unsafe void Render(IRenderAPI rapi, int pass, GraphicsSystem graphics, UniformPropertyHandle[] shaderUniforms, ref byte[] dummyBytes)
 			{
 				if(dummyBytes.Length < maxUniformSize)
 				{
@@ -751,8 +799,8 @@ _fail:
 				{
 					fixed(byte* zeroPtr = dummyBytes)
 					{
-						int len = commands.Length;
-						for(int i = 0; i < len; i++)
+						int last = renderPasses[pass].Index + renderPasses[pass].Count;
+						for(int i = renderPasses[pass].Index; i < last; i++)
 						{
 							var cmd = commands[i];
 							switch(cmd.Type)

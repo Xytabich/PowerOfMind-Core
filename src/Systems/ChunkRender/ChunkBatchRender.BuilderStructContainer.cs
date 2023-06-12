@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace PowerOfMind.Systems.ChunkRender
 {
-	public partial class ChunkRenderer
+	public partial class ChunkBatchRender
 	{
 		private class BuilderStructContainer<TVertex, TUniform> : IBuilderStructContainer
 			where TVertex : unmanaged, IVertexStruct

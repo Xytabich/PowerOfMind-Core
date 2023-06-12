@@ -1,10 +1,10 @@
 ﻿namespace PowerOfMind.Systems.ChunkRender
 {
-	public interface IChunkBuilder
+	public interface IBatchDataBuilder
 	{
 		/// <summary>
 		/// Builds the drawable data for the chunk. Called on a separate thread.
 		/// </summary>
-		void Build(IChunkBuilderContext context);
+		void Build(IBatchBuildContext context);
 	}
 }
