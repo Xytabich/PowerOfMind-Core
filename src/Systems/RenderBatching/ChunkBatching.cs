@@ -10,9 +10,9 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
-	public partial class ChunkBatchRender : IRenderer
+	public partial class ChunkBatching : IRenderer
 	{
 		double IRenderer.RenderOrder => 0.35;
 		int IRenderer.RenderRange => 0;
@@ -57,7 +57,7 @@ namespace PowerOfMind.Systems.ChunkRender
 
 		private byte[] dummyBytes = new byte[256];
 
-		public ChunkBatchRender(ICoreClientAPI capi, GraphicsSystem graphics)
+		public ChunkBatching(ICoreClientAPI capi, GraphicsSystem graphics)
 		{
 			this.capi = capi;
 			this.rapi = capi.Render;
@@ -228,8 +228,17 @@ _fail:
 		{
 			rapi.GLDepthMask(true);
 			rapi.GLEnableDepthTest();
+			switch(pass)
+			{
+				case EnumChunkRenderPass.OpaqueNoCull:
+				case EnumChunkRenderPass.BlendNoCull:
+					rapi.GlDisableCullFace();
+					break;
+				default:
+					rapi.GlEnableCullFace();
+					break;
+			}
 			rapi.GlToggleBlend(true);
-			rapi.GlDisableCullFace();
 			rapi.GlMatrixModeModelView();
 			rapi.GlPushMatrix();
 			rapi.GlLoadMatrix(rapi.CameraMatrixOrigin);

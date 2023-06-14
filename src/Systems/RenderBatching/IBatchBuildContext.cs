@@ -2,7 +2,7 @@
 using PowerOfMind.Graphics.Drawable;
 using Vintagestory.API.Client;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
 	public interface IBatchBuildContext
 	{

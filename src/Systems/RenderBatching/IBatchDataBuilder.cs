@@ -1,4 +1,4 @@
-﻿namespace PowerOfMind.Systems.ChunkRender
+﻿namespace PowerOfMind.Systems.RenderBatching
 {
 	public interface IBatchDataBuilder
 	{

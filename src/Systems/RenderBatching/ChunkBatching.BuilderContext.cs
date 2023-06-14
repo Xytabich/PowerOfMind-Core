@@ -7,9 +7,9 @@ using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Util;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
-	public partial class ChunkBatchRender
+	public partial class ChunkBatching
 	{
 		private partial class BuildTask
 		{
@@ -394,6 +394,10 @@ namespace PowerOfMind.Systems.ChunkRender
 					if(indicesCount > 0)
 					{
 						list.Add(new GraphicsCommand(indicesStart, indicesCount));
+					}
+					if(renderPassGroupStart < list.Count)
+					{
+						rpGroups.Add(new RenderPassGroup(renderPass, renderPassGroupStart, list.Count - renderPassGroupStart));
 					}
 
 					commands = list.ToArray();

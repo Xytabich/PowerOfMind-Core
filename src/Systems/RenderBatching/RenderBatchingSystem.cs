@@ -3,15 +3,15 @@ using System;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
-	public class ChunkBatchingSystem : ModSystem
+	public class RenderBatchingSystem : ModSystem
 	{
-		public ChunkBatchRender ChunkBatcher { get; private set; }
+		public ChunkBatching ChunkBatcher { get; private set; }
 
 		public override void StartClientSide(ICoreClientAPI api)
 		{
-			ChunkBatcher = new ChunkBatchRender(api, api.ModLoader.GetModSystem<GraphicsSystem>());
+			ChunkBatcher = new ChunkBatching(api, api.ModLoader.GetModSystem<GraphicsSystem>());
 		}
 
 		public override void Dispose()

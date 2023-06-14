@@ -1,10 +1,9 @@
 ﻿using PowerOfMind.Graphics;
-using System;
 using System.Collections.Generic;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
-	public partial class ChunkBatchRender
+	public partial class ChunkBatching
 	{
 		private class BuilderStructContainer<TVertex, TUniform> : IBuilderStructContainer
 			where TVertex : unmanaged, IVertexStruct

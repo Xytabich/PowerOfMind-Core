@@ -7,9 +7,9 @@ using System.Runtime.InteropServices;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
-	public partial class ChunkBatchRender
+	public partial class ChunkBatching
 	{
 		private partial class BuildTask
 		{
@@ -33,9 +33,9 @@ namespace PowerOfMind.Systems.ChunkRender
 			public uint[] indices;
 
 			private readonly IExtendedShaderProgram shader;
-			private readonly ChunkBatchRender container;
+			private readonly ChunkBatching container;
 
-			public BuildTask(ChunkBatchRender container, IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
+			public BuildTask(ChunkBatching container, IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
 			{
 				this.container = container;
 				this.shader = shader;

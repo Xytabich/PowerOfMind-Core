@@ -6,9 +6,9 @@ using System.Collections.Generic;
 using Vintagestory.API.Client;
 using XXHash;
 
-namespace PowerOfMind.Systems.ChunkRender
+namespace PowerOfMind.Systems.RenderBatching
 {
-	public partial class ChunkBatchRender
+	public partial class ChunkBatching
 	{
 		private class UniformsDataCollection
 		{
