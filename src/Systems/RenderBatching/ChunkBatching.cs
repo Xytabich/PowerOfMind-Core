@@ -68,7 +68,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			graphics.OnReloadShaders += ReloadAll;
 		}
 
-		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IBatchDataBuilder builder, in TVertex defaultVertex, in TUniform defaultUniform)
+		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IBatchDataBuilder builder, in TVertex vertexStruct, in TUniform uniformStruct)
 			where TVertex : unmanaged, IVertexStruct
 			where TUniform : unmanaged, IUniformsData
 		{
@@ -112,7 +112,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			rebuildStructs.Add(chunkShaderId);
 
 			ref var shaderUsage = ref chunkShaders[chunkShaderId];
-			id = builders.Add(shaderUsage.buildersChain, new BuilderInfo(cid, builder, new BuilderStructContainer<TVertex, TUniform>(defaultVertex, defaultUniform), chunkShaderId));
+			id = builders.Add(shaderUsage.buildersChain, new BuilderInfo(cid, builder, new BuilderStructContainer<TVertex, TUniform>(vertexStruct, uniformStruct), chunkShaderId));
 			if(shaderUsage.buildersChain < 0) shaderUsage.buildersChain = id;
 
 			return id;

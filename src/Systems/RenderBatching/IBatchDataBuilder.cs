@@ -3,7 +3,7 @@
 	public interface IBatchDataBuilder
 	{
 		/// <summary>
-		/// Builds the drawable data for the chunk. Called on a separate thread.
+		/// Builds the drawable data for the batcher. Called on a separate thread.
 		/// </summary>
 		void Build(IBatchBuildContext context);
 	}
