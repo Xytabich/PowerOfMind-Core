@@ -1,5 +1,4 @@
-﻿using OpenTK;
-using PowerOfMind.Collections;
+﻿using PowerOfMind.Collections;
 using PowerOfMind.Graphics;
 using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
@@ -9,6 +8,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
+using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Systems.RenderBatching
 {
@@ -292,7 +292,17 @@ namespace PowerOfMind.Systems.RenderBatching
 					return;
 				}
 
-				if(buildData.BuildIndices(data, cullSides))
+				bool cullBackfaces = true;
+				switch(renderPass)
+				{
+					case EnumChunkRenderPass.OpaqueNoCull:
+					case EnumChunkRenderPass.BlendNoCull:
+					case EnumChunkRenderPass.Liquid:
+						cullBackfaces = false;
+						break;
+				}
+
+				if(buildData.BuildIndices(data, cullSides, cullBackfaces))
 				{
 					chunkContext.AddData(buildData, uniformsData, renderPass);
 				}
@@ -308,7 +318,17 @@ namespace PowerOfMind.Systems.RenderBatching
 					return;
 				}
 
-				if(buildData.BuildIndices(data, cullSides))
+				bool cullBackfaces = true;
+				switch(renderPass)
+				{
+					case EnumChunkRenderPass.OpaqueNoCull:
+					case EnumChunkRenderPass.BlendNoCull:
+					case EnumChunkRenderPass.Liquid:
+						cullBackfaces = false;
+						break;
+				}
+
+				if(buildData.BuildIndices(data, cullSides, cullBackfaces))
 				{
 					chunkContext.AddData(buildData, renderPass);
 				}
@@ -330,16 +350,20 @@ namespace PowerOfMind.Systems.RenderBatching
 				private uint[] indices = null;
 
 				private bool hasIndices = false;
-				private bool vertsProcessed = false;
+
+				private bool cullBackfaces = false;
+				private int cullSides = 0;
 
 				public unsafe DrawableDataBuilder()
 				{
 					indicesProcessor = IndicesProcessor;
 				}
 
-				public bool BuildIndices(IDrawableData original, int cullSides)
+				public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)
 				{
 					this.original = original;
+					this.cullSides = cullSides;
+					this.cullBackfaces = cullBackfaces;
 					indicesCount = original.IndicesCount;
 					verticesCount = original.VerticesCount;
 					if(indices == null) indices = new uint[Math.Max(256, (int)original.IndicesCount)];
@@ -348,9 +372,8 @@ namespace PowerOfMind.Systems.RenderBatching
 					original.ProvideIndices(new IndicesContext(indicesProcessor, false));
 					if(hasIndices)
 					{
-						vertsProcessed = false;
 						original.ProvideVertices(new VerticesContext(this, false));
-						return vertsProcessed;
+						return indicesCount > 0;
 					}
 					return false;
 				}
@@ -370,7 +393,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				void IDrawableData.ProvideVertices(VerticesContext context)
 				{
-					original.ProvideVertices(context);
+					original.ProvideVertices(context);//TODO: offset positions
 				}
 
 				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
@@ -382,8 +405,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						ref readonly var attr = ref declaration.Attributes[i];
 						if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
 						{
-							CullIndices((byte*)data + attr.Offset, stride);
-							vertsProcessed = true;
+							CullIndices((byte*)data + attr.Offset, (uint)stride);
 							break;
 						}
 					}
@@ -400,16 +422,200 @@ namespace PowerOfMind.Systems.RenderBatching
 					}
 				}
 
-				private unsafe void CullIndices(byte* vertices, int stride)
+				private unsafe void CullIndices(byte* vertices, uint stride)
 				{
+					bool cullBackfaces = this.cullBackfaces;
+					int cullSides = this.cullSides;
+					TriangleCalcUtil util = default;
 					fixed(uint* ptr = indices)
 					{
-						for(uint i = 0; i < verticesCount; i += 3)
+						uint* moveTo = ptr;
+						//TODO: should be vertices culled too? i.e. add some Dictionary<uint, uint> origVertIndexToOutputIndex; & then only collect vertices from this list
+						uint counter = 0;
+						for(uint i = 0; i < indicesCount; i += 3)
 						{
-							//TODO: cull tris
+							uint a = ptr[i];
+							uint b = ptr[i];
+							uint c = ptr[i];
+
+							util.a = *(float3*)(vertices + a * stride);
+							util.b = *(float3*)(vertices + b * stride);
+							util.c = *(float3*)(vertices + c * stride);
+							float4 plane = new float4(math.cross(util.b - util.a, util.c - util.a), 0);
+
+							if(!cullBackfaces || CubeBoundsHelper.TriInView(plane.xyz, cullSides))
+							{
+								plane.xyz = math.normalize(plane.xyz);
+								plane.w = math.dot(util.a, plane.xyz);
+
+								var p = CubeBoundsHelper.cubeCenter - plane.xyz * math.dot(plane.xyz, CubeBoundsHelper.cubeCenter);
+
+								if(CubeBoundsHelper.PointInView(p, cullSides))
+								{
+									util.ClosestPointOnTriangleToPoint(ref p);
+									if(CubeBoundsHelper.PointInView(p, cullSides))
+									{
+										*moveTo = a;
+										moveTo++;
+										*moveTo = b;
+										moveTo++;
+										*moveTo = c;
+										moveTo++;
+
+										counter++;
+									}
+								}
+							}
 						}
+						indicesCount = counter;
 					}
 				}
+
+				[StructLayout(LayoutKind.Auto, Pack = 4)]
+				private struct TriangleCalcUtil
+				{
+					public float3 a, b, c;
+
+					private float3 ab, ac, ap, bp, cp;
+					private float v, d1, d2, d3, d4, d5, d6;
+
+					public void ClosestPointOnTriangleToPoint(ref float3 p)
+					{
+						//https://github.com/StudioTechtrics/closestPointOnMesh/blob/master/closestPointOnMesh/Assets/KDTreeData.cs
+						//Source: Real-Time Collision Detection by Christer Ericson
+						//Reference: Page 136
+
+						//Check if P in vertex region outside A
+						ab = b - a;
+						ac = c - a;
+						ap = p - a;
+
+						d1 = math.dot(ab, ap);
+						d2 = math.dot(ac, ap);
+						if(d1 <= 0.0f && d2 <= 0.0f)
+						{
+							p = a; //Barycentric coordinates (1,0,0)
+							return;
+						}
+
+						//Check if P in vertex region outside B
+						float3 bp = p - b;
+						d3 = math.dot(ab, bp);
+						d4 = math.dot(ac, bp);
+						if(d3 >= 0.0f && d4 <= d3)
+						{
+							p = b; //Barycentric coordinates (1,0,0)
+							return;
+						}
+
+						//Check if P in edge region of AB, if so return projection of P onto AB
+						v = d1 * d4 - d3 * d2;
+						if(v <= 0.0f && d1 >= 0.0f && d3 <= 0.0f)
+						{
+							v = d1 / (d1 - d3);
+							p = (1 - v) * a + v * b; //Barycentric coordinates (1-v,v,0)
+							return;
+						}
+
+						//Check if P in vertex region outside C
+						cp = p - c;
+						d5 = math.dot(ab, cp);
+						d6 = math.dot(ac, cp);
+						if(d6 >= 0.0f && d5 <= d6)
+						{
+							p = c; //Barycentric coordinates (1,0,0)
+							return;
+						}
+
+						//Check if P in edge region of AC, if so return projection of P onto AC
+						v = d5 * d2 - d1 * d6;
+						if(v <= 0.0f && d2 >= 0.0f && d6 <= 0.0f)
+						{
+							v = d2 / (d2 - d6);
+							p = (1 - v) * a + v * c; //Barycentric coordinates (1-w,0,w)
+							return;
+						}
+
+						//Check if P in edge region of BC, if so return projection of P onto BC
+						v = d3 * d6 - d5 * d4;
+						if(v <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+						{
+							v = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+							p = (1 - v) * b + v * c; //Barycentric coordinates (0,1-w,w)
+							return;
+						}
+
+						//P inside face region
+					}
+				}
+			}
+		}
+
+		private static unsafe class CubeBoundsHelper
+		{
+			private const float EPSILON_MIN = 0.0001f;
+			private const float EPSILON_MAX = 0.9999f;
+			private const float CONE_MAX = 0.6f;
+
+			private const int FLAG_NORTH = 1 << BlockFacing.indexNORTH;
+			private const int FLAG_EAST = 1 << BlockFacing.indexEAST;
+			private const int FLAG_SOUTH = 1 << BlockFacing.indexSOUTH;
+			private const int FLAG_WEST = 1 << BlockFacing.indexWEST;
+			private const int FLAG_UP = 1 << BlockFacing.indexUP;
+			private const int FLAG_DOWN = 1 << BlockFacing.indexDOWN;
+
+			public static readonly float3 cubeCenter = new float3(0.5f, 0.5f, 0.5f);
+
+			private static Float6x3 sideNormals;
+
+			static CubeBoundsHelper()
+			{
+				fixed(float* sideNormals = CubeBoundsHelper.sideNormals.values)
+				{
+					foreach(var face in BlockFacing.ALLFACES)
+					{
+						int i = face.Index * 3;
+						sideNormals[i] = face.Normalf.X;
+						sideNormals[i + 1] = face.Normalf.Y;
+						sideNormals[i + 2] = face.Normalf.Z;
+					}
+				}
+			}
+
+			public static bool PointInView(float3 v, int sidesMask)
+			{
+				if((v.x > EPSILON_MIN) & (v.x < EPSILON_MAX) & (v.y > EPSILON_MIN) & (v.y < EPSILON_MAX) & (v.z > EPSILON_MIN) & (v.z < EPSILON_MAX)) return true;
+				v = math.normalizesafe(v - cubeCenter);
+				fixed(float* sideNormals = CubeBoundsHelper.sideNormals.values)
+				{
+					if((sidesMask & FLAG_NORTH) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexNORTH]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_EAST) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexEAST]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_SOUTH) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexSOUTH]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_WEST) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexWEST]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_UP) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexUP]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_DOWN) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexDOWN]) > CONE_MAX) return true;
+				}
+				return false;
+			}
+
+			public static bool TriInView(float3 triNormal, int sidesMask)
+			{
+				fixed(float* sideNormals = CubeBoundsHelper.sideNormals.values)
+				{
+					if((sidesMask & FLAG_NORTH) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexNORTH]) > math.EPSILON) return true;
+					if((sidesMask & FLAG_EAST) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexEAST]) > math.EPSILON) return true;
+					if((sidesMask & FLAG_SOUTH) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexSOUTH]) > math.EPSILON) return true;
+					if((sidesMask & FLAG_WEST) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexWEST]) > math.EPSILON) return true;
+					if((sidesMask & FLAG_UP) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexUP]) > math.EPSILON) return true;
+					if((sidesMask & FLAG_DOWN) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexDOWN]) > math.EPSILON) return true;
+				}
+				return false;
+			}
+
+			[StructLayout(LayoutKind.Auto, Pack = 4)]
+			private struct Float6x3
+			{
+				public fixed float values[6 * 3];
 			}
 		}
 
@@ -458,7 +664,7 @@ namespace PowerOfMind.Systems.RenderBatching
 	public interface IBlockDataProvider
 	{
 		/// <summary>
-		/// Builds the drawable data for the batcher.
+		/// Provides the block data for the batcher.
 		/// Sometimes can be called for invalid coordinates, as it is processed in a different thread.
 		/// </summary>
 		void ProvideData(int3 pos, IBatchBuildContext context);
