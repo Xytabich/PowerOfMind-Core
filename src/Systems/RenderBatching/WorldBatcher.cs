@@ -4,6 +4,7 @@ using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Mathematics;
@@ -27,14 +28,24 @@ namespace PowerOfMind.Systems.RenderBatching
 		private readonly ChainList bitChains = new ChainList();
 		private readonly List<uint[]> bitBlocks = new List<uint[]>();
 
+		private readonly ChunkBatching batchingSystem;
 		private readonly TVertex vertexStruct;
 		private readonly TUniform uniformStruct;
 		private readonly IExtendedShaderProgram shader;
 
-		private readonly int3 chunkSize;
+		private readonly int chunkSize;
 		private readonly int bitBlockSize;
 
-		private bool isInited = false;
+		public WorldBatcher(ICoreClientAPI capi, IExtendedShaderProgram shader, in TVertex vertexStruct, in TUniform uniformStruct)
+		{
+			this.batchingSystem = capi.ModLoader.GetModSystem<RenderBatchingSystem>().ChunkBatcher;
+			this.shader = shader;
+			this.vertexStruct = vertexStruct;
+			this.uniformStruct = uniformStruct;
+
+			chunkSize = capi.World.BlockAccessor.ChunkSize;
+			bitBlockSize = (chunkSize * chunkSize * chunkSize) >> 5;
+		}
 
 		public int AddProvider(IBlockDataProvider provider)
 		{
@@ -51,11 +62,15 @@ namespace PowerOfMind.Systems.RenderBatching
 			var offset = pos / chunkSize;
 			if(!chunkToId.TryGetValue(offset, out var id))
 			{
-				id = chunks.Add(new ChunkBuilder(this, offset * chunkSize, AddBitBlock(-1), 1));
+				var builder = new ChunkBuilder(this, offset * chunkSize, AddBitBlock(-1), 1);
+				builder.batchingId = batchingSystem.AddBuilder(offset, shader, builder, vertexStruct, uniformStruct);
+				id = chunks.Add(builder);
 				chunkToId[offset] = id;
 			}
 			pos %= chunkSize;
 			chunks[id].AddBlock(GetBlockIndex(ref pos), providerId);
+
+			batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
 		}
 
 		public void RemoveBlock(int3 pos)
@@ -67,6 +82,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				if(chunks[id].RemoveBlock(GetBlockIndex(ref pos)))
 				{
 					chunkToId.Remove(offset);
+					batchingSystem.RemoveBuilder(chunks[id].batchingId);
 					chunks[id].Dispose();
 					chunks.Remove(id);
 				}
@@ -88,7 +104,7 @@ namespace PowerOfMind.Systems.RenderBatching
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private int GetBlockIndex(ref int3 pos)
 		{
-			return pos.x + (pos.y + pos.z * chunkSize.y) * chunkSize.x;
+			return pos.x + (pos.y + pos.z * chunkSize) * chunkSize;
 		}
 
 		private class ChunkBuilder : IBatchDataBuilder
@@ -97,6 +113,8 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			[ThreadStatic]
 			private static uint[][] bitBlocks = null;
+
+			public int batchingId;
 
 			private readonly WorldBatcher<TVertex, TUniform> batcher;
 			private readonly int3 origin;
@@ -150,6 +168,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				}
 				providers[providerIndex].usageCounter++;
 
+				providerIndex++;
 				int intIndex = bitIndex >> 5;
 				bitIndex &= 31;
 				foreach(var id in batcher.bitChains.GetEnumerable(bitsChain))
@@ -168,10 +187,13 @@ namespace PowerOfMind.Systems.RenderBatching
 				foreach(var id in batcher.bitChains.GetEnumerable(bitsChain))
 				{
 					var block = batcher.bitBlocks[id];
+					providerIndex <<= 1;
 					providerIndex |= (block[intIndex] >> bitIndex) & 1;
 					block[intIndex] &= ~(1u << bitIndex);
-					providerIndex <<= 1;
 				}
+				if(providerIndex == 0) return false;
+
+				providerIndex--;
 				if(--providers[(int)providerIndex].usageCounter == 0)
 				{
 					if(providerIndex == (uint)providersCount - 1)
@@ -229,19 +251,23 @@ namespace PowerOfMind.Systems.RenderBatching
 				int3 pos;
 				int prevIndex = -1;
 				if(batchBuildContext == null) batchBuildContext = new ChunkBatchBuildContext();
-				batchBuildContext.Init(batcher, origin, context);
-				for(pos.z = 0; pos.z < size.z; pos.z++)
+				batchBuildContext.Init(context);
+				for(pos.z = 0; pos.z < size; pos.z++)
 				{
-					for(pos.y = 0; pos.y < size.y; pos.y++)
+					for(pos.y = 0; pos.y < size; pos.y++)
 					{
-						for(pos.x = 0; pos.x < size.x; pos.x++)
+						for(pos.x = 0; pos.x < size; pos.x++)
 						{
 							int index = batcher.GetBlockIndex(ref pos);
 							bit = index & 31;
 							index >>= 5;
-							if(index != prevIndex) helper.FillFrom(bitBlocks, index >> 5, bitCount);
-							index = (int)helper.GetValue(bit, bitCount);
-							if(index <= 0 || index > providers.Length) continue;
+							if(index != prevIndex)
+							{
+								helper.FillFrom(bitBlocks, index, bitCount);
+								prevIndex = index;
+							}
+							index = (int)helper.GetValue(bit, bitCount) - 1;
+							if(index < 0 || index >= providers.Length) continue;
 
 							var provider = batcher.providers[providers[index].providerId];
 							if(provider != null)
@@ -249,6 +275,7 @@ namespace PowerOfMind.Systems.RenderBatching
 								int cullSides = provider.GetCullSides(pos + origin);
 								if((cullSides & CULL_ALL) == CULL_ALL) continue;
 								batchBuildContext.cullSides = cullSides;
+								batchBuildContext.blockOffset = pos;
 								provider.ProvideData(pos, batchBuildContext);
 							}
 						}
@@ -263,23 +290,20 @@ namespace PowerOfMind.Systems.RenderBatching
 			private const int CULL_MASK = 63;
 
 			public int cullSides;
+			public float3 blockOffset;
 
-			private int3 chunkOrigin;
 			private IBatchBuildContext chunkContext;
-			private WorldBatcher<TVertex, TUniform> batcher;
 
 			private readonly DrawableDataBuilder buildData = new DrawableDataBuilder();
+			private readonly VertsOffsetShell offsetShell = new VertsOffsetShell();
 
-			public void Init(WorldBatcher<TVertex, TUniform> batcher, int3 chunkOrigin, IBatchBuildContext chunkContext)
+			public void Init(IBatchBuildContext chunkContext)
 			{
-				this.batcher = batcher;
-				this.chunkOrigin = chunkOrigin;
 				this.chunkContext = chunkContext;
 			}
 
 			public void Clear()
 			{
-				batcher = null;
 				chunkContext = null;
 			}
 
@@ -288,7 +312,9 @@ namespace PowerOfMind.Systems.RenderBatching
 				if(data.DrawMode != EnumDrawMode.Triangles) return;
 				if((cullSides & CULL_MASK) == 0)
 				{
-					chunkContext.AddData(data, uniformsData, renderPass);
+					offsetShell.Init(data, blockOffset);
+					chunkContext.AddData(offsetShell, uniformsData, renderPass);
+					offsetShell.Clear();
 					return;
 				}
 
@@ -304,7 +330,9 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				if(buildData.BuildIndices(data, cullSides, cullBackfaces))
 				{
-					chunkContext.AddData(buildData, uniformsData, renderPass);
+					offsetShell.Init(buildData, blockOffset);
+					chunkContext.AddData(offsetShell, uniformsData, renderPass);
+					offsetShell.Clear();
 				}
 				buildData.Clear();
 			}
@@ -314,7 +342,9 @@ namespace PowerOfMind.Systems.RenderBatching
 				if(data.DrawMode != EnumDrawMode.Triangles) return;
 				if((cullSides & CULL_MASK) == 0)
 				{
-					chunkContext.AddData(data, renderPass);
+					offsetShell.Init(data, blockOffset);
+					chunkContext.AddData(offsetShell, renderPass);
+					offsetShell.Clear();
 					return;
 				}
 
@@ -330,9 +360,90 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				if(buildData.BuildIndices(data, cullSides, cullBackfaces))
 				{
-					chunkContext.AddData(buildData, renderPass);
+					offsetShell.Init(buildData, blockOffset);
+					chunkContext.AddData(offsetShell, renderPass);
+					offsetShell.Clear();
 				}
 				buildData.Clear();
+			}
+
+			private class VertsOffsetShell : IDrawableData, VerticesContext.IProcessor
+			{
+				EnumDrawMode IDrawableData.DrawMode => original.DrawMode;
+				uint IDrawableData.IndicesCount => original.IndicesCount;
+				uint IDrawableData.VerticesCount => verticesCount;
+				int IDrawableData.VertexBuffersCount => original.VertexBuffersCount;
+
+				private float3 offset;
+				private uint verticesCount;
+				private IDrawableData original;
+				private VerticesContext targetContext;
+
+				private byte[] dataBuffer = new byte[1024];
+
+				public void Init(IDrawableData original, float3 offset)
+				{
+					this.offset = offset;
+					this.original = original;
+					verticesCount = original.VerticesCount;
+				}
+
+				public void Clear()
+				{
+					original = null;
+				}
+
+				void IDrawableData.ProvideIndices(IndicesContext context)
+				{
+					original.ProvideIndices(context);
+				}
+
+				void IDrawableData.ProvideVertices(VerticesContext context)
+				{
+					targetContext = context;
+					original.ProvideVertices(new VerticesContext(this, false));
+					targetContext = default;
+				}
+
+				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
+				{
+					uint offset = uint.MaxValue;
+					for(int i = 0; i < declaration.Attributes.Length; i++)
+					{
+						ref readonly var attr = ref declaration.Attributes[i];
+						if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
+						{
+							offset = attr.Offset;
+							break;
+						}
+					}
+					if(offset < uint.MaxValue)
+					{
+						if((uint)dataBuffer.Length < verticesCount * (uint)stride)
+						{
+							dataBuffer = new byte[verticesCount * (uint)stride];
+						}
+						var posOffset = this.offset;
+						fixed(byte* ptr = dataBuffer)
+						{
+							Buffer.MemoryCopy(data, ptr, verticesCount * stride, verticesCount * stride);
+
+							byte* dPtr = ptr + offset;
+							for(int i = 0; i < verticesCount; i++)
+							{
+								*(float3*)dPtr += posOffset;
+
+								dPtr += stride;
+							}
+
+							targetContext.Process(bufferIndex, ptr, declaration, stride, isDynamic);
+						}
+					}
+					else
+					{
+						targetContext.Process(bufferIndex, data, declaration, stride, isDynamic);
+					}
+				}
 			}
 
 			private class DrawableDataBuilder : IDrawableData, VerticesContext.IProcessor
@@ -393,7 +504,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				void IDrawableData.ProvideVertices(VerticesContext context)
 				{
-					original.ProvideVertices(context);//TODO: offset positions
+					original.ProvideVertices(context);
 				}
 
 				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
@@ -566,7 +677,9 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			public static readonly float3 cubeCenter = new float3(0.5f, 0.5f, 0.5f);
 
+#pragma warning disable CS0169 // The field is never used
 			private static Float6x3 sideNormals;
+#pragma warning restore CS0169
 
 			static CubeBoundsHelper()
 			{
@@ -631,32 +744,57 @@ namespace PowerOfMind.Systems.RenderBatching
 				this.usageCounter = 0;
 			}
 		}
+	}
 
-		private unsafe struct BitHelper
+	[DebuggerTypeProxy(type: typeof(BitHelperDebugView))]
+	internal unsafe struct BitHelper
+	{
+		public fixed uint bitBlocks[32];
+
+		public void FillFrom(uint[][] bitBlocks, int index, int bitCount)
 		{
-			public fixed uint bitBlocks[32];
-
-			public void FillFrom(uint[][] bitBlocks, int index, int bitCount)
+			int i = 0;
+			while(i < bitCount)
 			{
-				int i = 0;
-				while(i < bitCount)
-				{
-					this.bitBlocks[i] = bitBlocks[i][index];
-					i++;
-				}
+				this.bitBlocks[i] = bitBlocks[i][index];
+				i++;
+			}
+		}
+
+		public uint GetValue(int bitOffset, int bitCount)
+		{
+			uint value = 0;
+			int i = bitCount - 1;
+			while(i >= 0)
+			{
+				value <<= 1;
+				value |= (bitBlocks[i] >> bitOffset) & 1;
+				i--;
+			}
+			return value;
+		}
+
+		internal class BitHelperDebugView
+		{
+			private readonly BitHelper bitHelper;
+
+			public BitHelperDebugView(BitHelper bitHelper)
+			{
+				this.bitHelper = bitHelper;
 			}
 
-			public uint GetValue(int bitOffset, int bitCount)
+			[DebuggerBrowsable(DebuggerBrowsableState.RootHidden)]
+			public uint[] Values
 			{
-				uint value = 0;
-				int i = bitCount - 1;
-				while(i >= 0)
+				get
 				{
-					value <<= 1;
-					value |= (bitBlocks[i] >> bitOffset) & 1;
-					i--;
+					var values = new uint[32];
+					for(int i = 0; i < 32; i++)
+					{
+						values[i] = bitHelper.bitBlocks[i];
+					}
+					return values;
 				}
-				return value;
 			}
 		}
 	}

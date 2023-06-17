@@ -72,6 +72,8 @@ namespace PowerOfMind.Systems.RenderBatching
 			where TVertex : unmanaged, IVertexStruct
 			where TUniform : unmanaged, IUniformsData
 		{
+			if(shader.Disposed) throw new InvalidOperationException("Shader is not initialized");
+
 			if(!chunkToId.TryGetValue(chunk, out int cid))
 			{
 				cid = chunks.Add(new ChunkInfo(chunk, chunk * capi.World.BlockAccessor.ChunkSize));

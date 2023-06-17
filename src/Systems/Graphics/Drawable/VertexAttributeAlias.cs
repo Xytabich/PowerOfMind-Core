@@ -5,11 +5,11 @@
 	/// </summary>
 	public static class VertexAttributeAlias
 	{
-		public static string POSITION = "POSITION";
-		public static string TEXCOORD_0 = "TEXCOORD_0";
-		public static string NORMAL = "NORMAL";
-		public static string COLOR = "COLOR";
-		public static string FLAGS = "FLAGS";
-		public static string JOINT_ID = "JOINT_ID";
+		public const string POSITION = "POSITION";
+		public const string TEXCOORD_0 = "TEXCOORD_0";
+		public const string NORMAL = "NORMAL";
+		public const string COLOR = "COLOR";
+		public const string FLAGS = "FLAGS";
+		public const string JOINT_ID = "JOINT_ID";
 	}
 }
