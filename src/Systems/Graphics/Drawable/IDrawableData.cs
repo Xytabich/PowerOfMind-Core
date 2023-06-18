@@ -18,7 +18,7 @@ namespace PowerOfMind.Graphics.Drawable
 		void ProvideVertices(VerticesContext context);
 	}
 
-	public readonly struct IndicesContext
+	public readonly ref struct IndicesContext
 	{
 		/// <summary>
 		/// Provide indices to the processor
@@ -45,9 +45,18 @@ namespace PowerOfMind.Graphics.Drawable
 		{
 			processor(indices, isDynamic);
 		}
+
+		/// <summary>
+		/// Returns a reference to the processor.
+		/// Be careful, the reference must be immediately set to null after use to avoid memory leaks.
+		/// </summary>
+		public ProcessorDelegate GetProcessor()
+		{
+			return processor;
+		}
 	}
 
-	public readonly struct VerticesContext
+	public readonly ref struct VerticesContext
 	{
 		public readonly bool ProvideDynamicOnly;
 
@@ -67,6 +76,15 @@ namespace PowerOfMind.Graphics.Drawable
 		public unsafe void Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic) where T : unmanaged//TODO: maybe add bufferIndex field to context instead? so that the mesh does not enumerates buffers, but the processor itself requests the buffer by index
 		{
 			processor.Process(bufferIndex, data, declaration, stride, isDynamic);
+		}
+
+		/// <summary>
+		/// Returns a reference to the processor.
+		/// Be careful, the reference must be immediately set to null after use to avoid memory leaks.
+		/// </summary>
+		public IProcessor GetProcessor()
+		{
+			return processor;
 		}
 
 		public interface IProcessor

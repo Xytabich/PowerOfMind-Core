@@ -299,7 +299,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			private IBatchBuildContext chunkContext;
 
 			private readonly DrawableDataBuilder buildData = new DrawableDataBuilder();
-			private readonly VertsOffsetShell offsetShell = new VertsOffsetShell();
+			private readonly VertexPositionOffsetUtil offsetShell = new VertexPositionOffsetUtil();
 
 			public void Init(IBatchBuildContext chunkContext)
 			{
@@ -371,85 +371,6 @@ namespace PowerOfMind.Systems.RenderBatching
 				buildData.Clear();
 			}
 
-			private class VertsOffsetShell : IDrawableData, VerticesContext.IProcessor
-			{
-				EnumDrawMode IDrawableData.DrawMode => original.DrawMode;
-				uint IDrawableData.IndicesCount => original.IndicesCount;
-				uint IDrawableData.VerticesCount => verticesCount;
-				int IDrawableData.VertexBuffersCount => original.VertexBuffersCount;
-
-				private float3 offset;
-				private uint verticesCount;
-				private IDrawableData original;
-				private VerticesContext targetContext;
-
-				private byte[] dataBuffer = new byte[1024];
-
-				public void Init(IDrawableData original, float3 offset)
-				{
-					this.offset = offset;
-					this.original = original;
-					verticesCount = original.VerticesCount;
-				}
-
-				public void Clear()
-				{
-					original = null;
-				}
-
-				void IDrawableData.ProvideIndices(IndicesContext context)
-				{
-					original.ProvideIndices(context);
-				}
-
-				void IDrawableData.ProvideVertices(VerticesContext context)
-				{
-					targetContext = context;
-					original.ProvideVertices(new VerticesContext(this, false));
-					targetContext = default;
-				}
-
-				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
-				{
-					uint offset = uint.MaxValue;
-					for(int i = 0; i < declaration.Attributes.Length; i++)
-					{
-						ref readonly var attr = ref declaration.Attributes[i];
-						if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
-						{
-							offset = attr.Offset;
-							break;
-						}
-					}
-					if(offset < uint.MaxValue)
-					{
-						if((uint)dataBuffer.Length < verticesCount * (uint)stride)
-						{
-							dataBuffer = new byte[verticesCount * (uint)stride];
-						}
-						var posOffset = this.offset;
-						fixed(byte* ptr = dataBuffer)
-						{
-							Buffer.MemoryCopy(data, ptr, verticesCount * stride, verticesCount * stride);
-
-							byte* dPtr = ptr + offset;
-							for(int i = 0; i < verticesCount; i++)
-							{
-								*(float3*)dPtr += posOffset;
-
-								dPtr += stride;
-							}
-
-							targetContext.Process(bufferIndex, ptr, declaration, stride, isDynamic);
-						}
-					}
-					else
-					{
-						targetContext.Process(bufferIndex, data, declaration, stride, isDynamic);
-					}
-				}
-			}
-
 			private class DrawableDataBuilder : IDrawableData, VerticesContext.IProcessor
 			{
 				EnumDrawMode IDrawableData.DrawMode => EnumDrawMode.Triangles;
@@ -474,7 +395,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					indicesProcessor = IndicesProcessor;
 				}
 
-				public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)//FIX: doesnt work
+				public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)
 				{
 					this.original = original;
 					this.cullSides = cullSides;
@@ -540,7 +461,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				private unsafe void CullIndices(byte* vertices, uint stride)
 				{
 					bool cullBackfaces = this.cullBackfaces;
-					int cullSides = this.cullSides;
+					int visibleSides = ~this.cullSides;
 					TriangleCalcUtil util = default;
 					fixed(uint* ptr = indices)
 					{
@@ -550,25 +471,24 @@ namespace PowerOfMind.Systems.RenderBatching
 						for(uint i = 0; i < indicesCount; i += 3)
 						{
 							uint a = ptr[i];
-							uint b = ptr[i];
-							uint c = ptr[i];
+							uint b = ptr[i + 1];
+							uint c = ptr[i + 2];
 
 							util.a = *(float3*)(vertices + a * stride);
 							util.b = *(float3*)(vertices + b * stride);
 							util.c = *(float3*)(vertices + c * stride);
 							float4 plane = new float4(math.cross(util.b - util.a, util.c - util.a), 0);
 
-							if(!cullBackfaces || CubeBoundsHelper.TriInView(plane.xyz, cullSides))
+							if(!cullBackfaces || CubeBoundsHelper.TriInView(plane.xyz, visibleSides))
 							{
 								plane.xyz = math.normalize(plane.xyz);
-								plane.w = math.dot(util.a, plane.xyz);
+								plane.w = -math.dot(util.a, plane.xyz);
 
-								var p = CubeBoundsHelper.cubeCenter - plane.xyz * math.dot(plane.xyz, CubeBoundsHelper.cubeCenter);
+								var p = CubeBoundsHelper.cubeCenter - plane.xyz * (math.dot(plane.xyz, CubeBoundsHelper.cubeCenter) + plane.w);
 
-								if(CubeBoundsHelper.PointInView(p, cullSides))
+								if(CubeBoundsHelper.PointInView(p, visibleSides))
 								{
-									util.ClosestPointOnTriangleToPoint(ref p);
-									if(CubeBoundsHelper.PointInView(p, cullSides))
+									if(util.ClosestPointOnTriangleToPoint(ref p) || CubeBoundsHelper.PointInView(p, visibleSides))
 									{
 										*moveTo = a;
 										moveTo++;
@@ -577,7 +497,7 @@ namespace PowerOfMind.Systems.RenderBatching
 										*moveTo = c;
 										moveTo++;
 
-										counter++;
+										counter += 3;
 									}
 								}
 							}
@@ -594,7 +514,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					private float3 ab, ac, ap, bp, cp;
 					private float v, d1, d2, d3, d4, d5, d6;
 
-					public void ClosestPointOnTriangleToPoint(ref float3 p)
+					public bool ClosestPointOnTriangleToPoint(ref float3 p)
 					{
 						//https://github.com/StudioTechtrics/closestPointOnMesh/blob/master/closestPointOnMesh/Assets/KDTreeData.cs
 						//Source: Real-Time Collision Detection by Christer Ericson
@@ -610,7 +530,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						if(d1 <= 0.0f && d2 <= 0.0f)
 						{
 							p = a; //Barycentric coordinates (1,0,0)
-							return;
+							return false;
 						}
 
 						//Check if P in vertex region outside B
@@ -620,7 +540,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						if(d3 >= 0.0f && d4 <= d3)
 						{
 							p = b; //Barycentric coordinates (1,0,0)
-							return;
+							return false;
 						}
 
 						//Check if P in edge region of AB, if so return projection of P onto AB
@@ -629,7 +549,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						{
 							v = d1 / (d1 - d3);
 							p = (1 - v) * a + v * b; //Barycentric coordinates (1-v,v,0)
-							return;
+							return false;
 						}
 
 						//Check if P in vertex region outside C
@@ -639,7 +559,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						if(d6 >= 0.0f && d5 <= d6)
 						{
 							p = c; //Barycentric coordinates (1,0,0)
-							return;
+							return false;
 						}
 
 						//Check if P in edge region of AC, if so return projection of P onto AC
@@ -648,7 +568,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						{
 							v = d2 / (d2 - d6);
 							p = (1 - v) * a + v * c; //Barycentric coordinates (1-w,0,w)
-							return;
+							return false;
 						}
 
 						//Check if P in edge region of BC, if so return projection of P onto BC
@@ -657,10 +577,11 @@ namespace PowerOfMind.Systems.RenderBatching
 						{
 							v = (d4 - d3) / ((d4 - d3) + (d5 - d6));
 							p = (1 - v) * b + v * c; //Barycentric coordinates (0,1-w,w)
-							return;
+							return false;
 						}
 
 						//P inside face region
+						return true;
 					}
 				}
 			}
@@ -668,8 +589,8 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		private static unsafe class CubeBoundsHelper
 		{
-			private const float EPSILON_MIN = 0.0001f;
-			private const float EPSILON_MAX = 0.9999f;
+			private const float EPSILON_MIN = -0.0001f;
+			private const float EPSILON_MAX = 1.0001f;
 			private const float CONE_MAX = 0.6f;
 
 			private const int FLAG_NORTH = 1 << BlockFacing.indexNORTH;
@@ -801,20 +722,5 @@ namespace PowerOfMind.Systems.RenderBatching
 				}
 			}
 		}
-	}
-
-	public interface IBlockDataProvider
-	{
-		/// <summary>
-		/// Provides the block data for the batcher.
-		/// Sometimes can be called for invalid coordinates, as it is processed in a different thread.
-		/// </summary>
-		void ProvideData(int3 pos, IBatchBuildContext context);
-
-		/// <summary>
-		/// Returns mask of block sides that should be culled.
-		/// Sometimes can be called for invalid coordinates, as it is processed in a different thread.
-		/// </summary>
-		int GetCullSides(int3 pos);
 	}
 }

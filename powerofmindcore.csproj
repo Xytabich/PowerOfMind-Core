@@ -95,6 +95,8 @@
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuildTask.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.Helpers.cs" />
+    <Compile Include="src\Systems\RenderBatching\IBlockDataProvider.cs" />
+    <Compile Include="src\Systems\RenderBatching\VertexPositionOffsetUtil.cs" />
     <Compile Include="src\Systems\RenderBatching\WorldBatcher.cs" />
     <Compile Include="src\Systems\RenderBatching\RenderBatchingSystem.cs" />
     <Compile Include="src\Systems\RenderBatching\IBatchDataBuilder.cs" />
