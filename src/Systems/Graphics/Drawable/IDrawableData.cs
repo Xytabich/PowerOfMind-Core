@@ -13,9 +13,35 @@ namespace PowerOfMind.Graphics.Drawable
 
 		int VertexBuffersCount { get; }
 
+		IndicesMeta GetIndicesMeta();
+
+		VertexBufferMeta GetVertexBufferMeta(int index);
+
 		void ProvideIndices(IndicesContext context);
 
 		void ProvideVertices(VerticesContext context);
+	}
+
+	public readonly struct IndicesMeta
+	{
+		public readonly bool IsDynamic;
+
+		public IndicesMeta(bool isDynamic)
+		{
+			IsDynamic = isDynamic;
+		}
+	}
+
+	public readonly struct VertexBufferMeta
+	{
+		public readonly VertexDeclaration Declaration;
+		public readonly bool IsDynamic;
+
+		public VertexBufferMeta(VertexDeclaration declaration, bool isDynamic)
+		{
+			Declaration = declaration;
+			IsDynamic = isDynamic;
+		}
 	}
 
 	public readonly ref struct IndicesContext
@@ -24,16 +50,13 @@ namespace PowerOfMind.Graphics.Drawable
 		/// Provide indices to the processor
 		/// </summary>
 		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
-		public unsafe delegate void ProcessorDelegate(uint* indices, bool isDynamic);
-
-		public readonly bool ProvideDynamicOnly;
+		public unsafe delegate void ProcessorDelegate(uint* indices);
 
 		private readonly ProcessorDelegate processor;
 
-		public IndicesContext(ProcessorDelegate processor, bool provideDynamicOnly)
+		public IndicesContext(ProcessorDelegate processor)
 		{
 			this.processor = processor;
-			ProvideDynamicOnly = provideDynamicOnly;
 		}
 
 		/// <summary>
@@ -41,9 +64,9 @@ namespace PowerOfMind.Graphics.Drawable
 		/// </summary>
 		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process(uint* indices, bool isDynamic)
+		public unsafe void Process(uint* indices)
 		{
-			processor(indices, isDynamic);
+			processor(indices);
 		}
 
 		/// <summary>
@@ -58,14 +81,20 @@ namespace PowerOfMind.Graphics.Drawable
 
 	public readonly ref struct VerticesContext
 	{
-		public readonly bool ProvideDynamicOnly;
+		/// <summary>
+		/// Provide vertices data to the processor
+		/// </summary>
+		/// <param name="indices">Pointer to vertices data, or null. If null is specified, no data will be copied</param>
+		public unsafe delegate void ProcessorDelegate(void* indices, int stride);
 
-		private readonly IProcessor processor;
+		public readonly int BufferIndex;
 
-		public VerticesContext(IProcessor processor, bool provideDynamicOnly)
+		private readonly ProcessorDelegate processor;
+
+		public VerticesContext(ProcessorDelegate processor, int bufferIndex)
 		{
 			this.processor = processor;
-			ProvideDynamicOnly = provideDynamicOnly;
+			BufferIndex = bufferIndex;
 		}
 
 		/// <summary>
@@ -73,27 +102,18 @@ namespace PowerOfMind.Graphics.Drawable
 		/// </summary>
 		/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic) where T : unmanaged//TODO: maybe add bufferIndex field to context instead? so that the mesh does not enumerates buffers, but the processor itself requests the buffer by index
+		public unsafe void Process(void* data, int stride)
 		{
-			processor.Process(bufferIndex, data, declaration, stride, isDynamic);
+			processor(data, stride);
 		}
 
 		/// <summary>
 		/// Returns a reference to the processor.
 		/// Be careful, the reference must be immediately set to null after use to avoid memory leaks.
 		/// </summary>
-		public IProcessor GetProcessor()
+		public ProcessorDelegate GetProcessor()
 		{
 			return processor;
-		}
-
-		public interface IProcessor
-		{
-			/// <summary>
-			/// Provide data to the processor
-			/// </summary>
-			/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
-			unsafe void Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic) where T : unmanaged;
 		}
 	}
 }

@@ -6,25 +6,52 @@ using Vintagestory.API.Client;
 
 namespace PowerOfMind.Systems.RenderBatching
 {
-	public class VertexPositionOffsetUtil : IDrawableData, VerticesContext.IProcessor
+	public class VertexPositionOffsetUtil : IDrawableData
 	{
 		EnumDrawMode IDrawableData.DrawMode => original.DrawMode;
 		uint IDrawableData.IndicesCount => original.IndicesCount;
 		uint IDrawableData.VerticesCount => verticesCount;
 		int IDrawableData.VertexBuffersCount => original.VertexBuffersCount;
 
+		private readonly VerticesContext.ProcessorDelegate Process;
+
 		private float3 offset;
 		private uint verticesCount;
 		private IDrawableData original;
-		private VerticesContext.IProcessor targetProcessor;
 
-		private byte[] dataBuffer = new byte[1024];
+		private int posBufferIndex;
+		private uint posBufferOffset;
+		private VerticesContext.ProcessorDelegate targetProcessor;
+
+		private byte[] dataBuffer;
+
+		public unsafe VertexPositionOffsetUtil(int bufferCapacity = 1024)
+		{
+			dataBuffer = new byte[bufferCapacity];
+			Process = ProcessImpl;
+		}
 
 		public void Init(IDrawableData original, float3 offset)
 		{
 			this.offset = offset;
 			this.original = original;
 			verticesCount = original.VerticesCount;
+			posBufferIndex = -1;
+			int buffCount = original.VertexBuffersCount;
+			for(int i = 0; i < buffCount; i++)
+			{
+				var attributes = original.GetVertexBufferMeta(i).Declaration.Attributes;
+				for(int j = 0; j < attributes.Length; j++)
+				{
+					ref readonly var attr = ref attributes[j];
+					if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
+					{
+						posBufferIndex = i;
+						posBufferOffset = attr.Offset;
+						break;
+					}
+				}
+			}
 		}
 
 		public void Clear()
@@ -39,49 +66,50 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		void IDrawableData.ProvideVertices(VerticesContext context)
 		{
-			targetProcessor = context.GetProcessor();
-			original.ProvideVertices(new VerticesContext(this, false));
-			targetProcessor = null;
-		}
-
-		unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
-		{
-			uint offset = uint.MaxValue;
-			for(int i = 0; i < declaration.Attributes.Length; i++)
+			if(context.BufferIndex == posBufferIndex)
 			{
-				ref readonly var attr = ref declaration.Attributes[i];
-				if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
-				{
-					offset = attr.Offset;
-					break;
-				}
-			}
-			if(offset < uint.MaxValue)
-			{
-				if((uint)dataBuffer.Length < verticesCount * (uint)stride)
-				{
-					dataBuffer = new byte[verticesCount * (uint)stride];
-				}
-				var posOffset = this.offset;
-				fixed(byte* ptr = dataBuffer)
-				{
-					Buffer.MemoryCopy(data, ptr, verticesCount * stride, verticesCount * stride);
-
-					byte* dPtr = ptr + offset;
-					for(int i = 0; i < verticesCount; i++)
-					{
-						*(float3*)dPtr += posOffset;
-
-						dPtr += stride;
-					}
-
-					targetProcessor.Process(bufferIndex, ptr, declaration, stride, isDynamic);
-				}
+				targetProcessor = context.GetProcessor();
+				original.ProvideVertices(new VerticesContext(Process, context.BufferIndex));
+				targetProcessor = null;
 			}
 			else
 			{
-				targetProcessor.Process(bufferIndex, data, declaration, stride, isDynamic);
+				original.ProvideVertices(context);
 			}
+		}
+
+		private unsafe void ProcessImpl(void* data, int stride)
+		{
+			uint offset = posBufferOffset;
+			if((uint)dataBuffer.Length < verticesCount * (uint)stride)
+			{
+				dataBuffer = new byte[verticesCount * (uint)stride];
+			}
+			var posOffset = this.offset;
+			fixed(byte* ptr = dataBuffer)
+			{
+				Buffer.MemoryCopy(data, ptr, verticesCount * stride, verticesCount * stride);
+
+				byte* dPtr = ptr + offset;
+				for(int i = 0; i < verticesCount; i++)
+				{
+					*(float3*)dPtr += posOffset;
+
+					dPtr += stride;
+				}
+
+				targetProcessor(ptr, stride);
+			}
+		}
+
+		IndicesMeta IDrawableData.GetIndicesMeta()
+		{
+			return original.GetIndicesMeta();
+		}
+
+		VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+		{
+			return original.GetVertexBufferMeta(index);
 		}
 	}
 }

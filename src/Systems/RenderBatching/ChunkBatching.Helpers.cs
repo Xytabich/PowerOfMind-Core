@@ -171,35 +171,39 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			unsafe void IDrawableData.ProvideIndices(IndicesContext context)
 			{
-				if(!context.ProvideDynamicOnly)
+				if(indicesData == null) context.Process(null);
+				else
 				{
-					if(indicesData == null) context.Process(null, false);
-					else
+					fixed(uint* ptr = indicesData)
 					{
-						fixed(uint* ptr = indicesData)
-						{
-							context.Process(ptr, false);
-						}
+						context.Process(ptr);
 					}
 				}
 			}
 
 			unsafe void IDrawableData.ProvideVertices(VerticesContext context)
 			{
-				if(!context.ProvideDynamicOnly)
+				if(verticesData == null)
 				{
-					if(verticesData == null)
+					context.Process((byte*)null, verticesStride);
+				}
+				else
+				{
+					fixed(byte* ptr = verticesData)
 					{
-						context.Process(0, (byte*)null, vertexDeclaration, verticesStride, false);
-					}
-					else
-					{
-						fixed(byte* ptr = verticesData)
-						{
-							context.Process(0, ptr, vertexDeclaration, verticesStride, false);
-						}
+						context.Process(ptr, verticesStride);
 					}
 				}
+			}
+
+			IndicesMeta IDrawableData.GetIndicesMeta()
+			{
+				return new IndicesMeta(false);
+			}
+
+			VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+			{
+				return new VertexBufferMeta(vertexDeclaration, false);
 			}
 		}
 	}

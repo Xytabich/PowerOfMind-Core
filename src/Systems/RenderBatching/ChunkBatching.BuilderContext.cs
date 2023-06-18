@@ -13,7 +13,7 @@ namespace PowerOfMind.Systems.RenderBatching
 	{
 		private partial class BuildTask
 		{
-			private class BuilderContext : IBatchBuildContext, VerticesContext.IProcessor
+			private class BuilderContext : IBatchBuildContext
 			{
 				public int vertOffsetLocal = 0;
 				public int indOffsetLocal = 0;
@@ -38,7 +38,9 @@ namespace PowerOfMind.Systems.RenderBatching
 				private int currentIndBlock = 0;
 
 				private bool hasIndices = false;
+				private bool hasVertices = false;
 				private IndicesContext.ProcessorDelegate addIndicesCallback;
+				private VerticesContext.ProcessorDelegate addVerticesCallback;
 
 				private readonly Dictionary<int, int> componentsToMap = new Dictionary<int, int>();
 				private readonly Dictionary<int, int> tmpUniformsMap = new Dictionary<int, int>();
@@ -52,6 +54,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					this.task = task;
 
 					addIndicesCallback = InsertIndices;
+					addVerticesCallback = ProcessVerties;
 					addMappedUniformsCallback = AddMappedUniforms;
 				}
 
@@ -432,11 +435,9 @@ namespace PowerOfMind.Systems.RenderBatching
 					}
 				}
 
-				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
+				private unsafe void ProcessVerties(void* data, int stride)
 				{
-					if(isDynamic || (data == null && !hasIndices)) return;
-					tmpAttributes.Clear();
-					task.shader.MapDeclaration(declaration, tmpAttributes);
+					if(data == null) return;
 					for(int i = 0; i < tmpAttributes.Count; i++)
 					{
 						if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
@@ -447,6 +448,7 @@ namespace PowerOfMind.Systems.RenderBatching
 							{
 								componentsToMap.Remove(tmpAttributes[i].Location);
 
+								hasVertices = true;
 								CopyComponentData(attribIndex, (byte*)data + tmpAttributes[i].Offset, stride);
 							}
 						}
@@ -473,12 +475,14 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				private unsafe void AddData(IDrawableData data, EnumChunkRenderPass renderPass, Action beforeCmd = null)
 				{
+					if(data.GetIndicesMeta().IsDynamic) return;
+
 					currentVertCount = (int)data.VerticesCount;
 					currentIndCount = (int)data.IndicesCount;
 					EnsureCapacity();
 
 					hasIndices = false;
-					data.ProvideIndices(new IndicesContext(addIndicesCallback, false));
+					data.ProvideIndices(new IndicesContext(addIndicesCallback));
 
 					if(!hasIndices) return;
 
@@ -488,9 +492,20 @@ namespace PowerOfMind.Systems.RenderBatching
 					{
 						componentsToMap[task.declaration.Attributes[map[i].Value].Location] = i;
 					}
-					data.ProvideVertices(new VerticesContext(this, false));
 
-					if(hasIndices)
+					hasVertices = false;
+					int vBuffCount = data.VertexBuffersCount;
+					for(int i = 0; i < vBuffCount; i++)
+					{
+						var meta = data.GetVertexBufferMeta(i);
+						if(meta.IsDynamic) continue;
+
+						tmpAttributes.Clear();
+						task.shader.MapDeclaration(meta.Declaration, tmpAttributes);
+						data.ProvideVertices(new VerticesContext(addVerticesCallback, i));
+					}
+
+					if(hasVertices)
 					{
 						if(componentsToMap.Count > 0)
 						{
@@ -602,9 +617,9 @@ namespace PowerOfMind.Systems.RenderBatching
 					}
 				}
 
-				private unsafe void InsertIndices(uint* indices, bool isDynamic)
+				private unsafe void InsertIndices(uint* indices)
 				{
-					if(isDynamic || indices == null) return;
+					if(indices == null) return;
 					hasIndices = true;
 
 					int countToCopy = currentIndCount;

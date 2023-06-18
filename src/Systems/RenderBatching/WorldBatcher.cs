@@ -371,7 +371,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				buildData.Clear();
 			}
 
-			private class DrawableDataBuilder : IDrawableData, VerticesContext.IProcessor
+			private class DrawableDataBuilder : IDrawableData
 			{
 				EnumDrawMode IDrawableData.DrawMode => EnumDrawMode.Triangles;
 				uint IDrawableData.IndicesCount => indicesCount;
@@ -379,6 +379,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				int IDrawableData.VertexBuffersCount => original.VertexBuffersCount;
 
 				private readonly IndicesContext.ProcessorDelegate indicesProcessor;
+				private readonly VerticesContext.ProcessorDelegate verticesProcessor;
 
 				private IDrawableData original;
 				private uint indicesCount;
@@ -386,6 +387,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				private uint[] indices = null;
 
 				private bool hasIndices = false;
+				private uint posDataOffset;
 
 				private bool cullBackfaces = false;
 				private int cullSides = 0;
@@ -393,6 +395,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				public unsafe DrawableDataBuilder()
 				{
 					indicesProcessor = IndicesProcessor;
+					verticesProcessor = VerticesProcessor;
 				}
 
 				public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)
@@ -409,10 +412,26 @@ namespace PowerOfMind.Systems.RenderBatching
 					}
 
 					hasIndices = false;
-					original.ProvideIndices(new IndicesContext(indicesProcessor, false));
+					original.ProvideIndices(new IndicesContext(indicesProcessor));
 					if(hasIndices)
 					{
-						original.ProvideVertices(new VerticesContext(this, false));
+						var vBuffCount = original.VertexBuffersCount;
+						for(int i = 0; i < vBuffCount; i++)
+						{
+							var meta = original.GetVertexBufferMeta(i);
+							if(meta.IsDynamic) continue;
+							var attributes = meta.Declaration.Attributes;
+							for(int j = 0; j < attributes.Length; j++)
+							{
+								ref readonly var attr = ref attributes[j];
+								if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
+								{
+									posDataOffset = attr.Offset;
+									original.ProvideVertices(new VerticesContext(verticesProcessor, i));
+									break;
+								}
+							}
+						}
 						return indicesCount > 0;
 					}
 					return false;
@@ -427,7 +446,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				{
 					fixed(uint* ptr = indices)
 					{
-						context.Process(ptr, false);
+						context.Process(ptr);
 					}
 				}
 
@@ -436,24 +455,25 @@ namespace PowerOfMind.Systems.RenderBatching
 					original.ProvideVertices(context);
 				}
 
-				unsafe void VerticesContext.IProcessor.Process<T>(int bufferIndex, T* data, VertexDeclaration declaration, int stride, bool isDynamic)
+				IndicesMeta IDrawableData.GetIndicesMeta()
 				{
-					if(isDynamic) return;
-
-					for(int i = 0; i < declaration.Attributes.Length; i++)
-					{
-						ref readonly var attr = ref declaration.Attributes[i];
-						if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
-						{
-							CullIndices((byte*)data + attr.Offset, (uint)stride);
-							break;
-						}
-					}
+					return new IndicesMeta(false);
 				}
 
-				private unsafe void IndicesProcessor(uint* indices, bool isDynamic)
+				VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
 				{
-					if(isDynamic) return;
+					return original.GetVertexBufferMeta(index);
+				}
+
+				private unsafe void VerticesProcessor(void* data, int stride)
+				{
+					if(data == null) return;
+					CullIndices((byte*)data + posDataOffset, (uint)stride);
+				}
+
+				private unsafe void IndicesProcessor(uint* indices)
+				{
+					if(indices == null) return;
 					hasIndices = true;
 
 					fixed(uint* ptr = this.indices)

@@ -54,24 +54,28 @@ namespace PowerOfMind.Graphics
 
 		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
 		{
-			if(!context.ProvideDynamicOnly || !IndicesStatic)
+			fixed(int* ptr = Indices)
 			{
-				fixed(int* ptr = Indices)
-				{
-					context.Process((uint*)ptr + IndicesOffset, !IndicesStatic);
-				}
+				context.Process((uint*)ptr + IndicesOffset);
 			}
 		}
 
 		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
 		{
-			if(!context.ProvideDynamicOnly || !VerticesStatic)
+			fixed(T* ptr = Vertices)
 			{
-				fixed(T* ptr = Vertices)
-				{
-					context.Process(0, ptr + VerticesOffset, VertexDeclaration, sizeof(T), !VerticesStatic);
-				}
+				context.Process(ptr + VerticesOffset, sizeof(T));
 			}
+		}
+
+		IndicesMeta IDrawableData.GetIndicesMeta()
+		{
+			return new IndicesMeta(!IndicesStatic);
+		}
+
+		VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+		{
+			return new VertexBufferMeta(VertexDeclaration, !VerticesStatic);
 		}
 	}
 
@@ -113,31 +117,49 @@ namespace PowerOfMind.Graphics
 			IndicesCount = indices.Length;
 
 			StaticVertexDeclaration = staticVertices[0].GetDeclaration();
+			DynamicVertexDeclaration = dynamicVertices[0].GetDeclaration();
 		}
 
 		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
 		{
-			if(!context.ProvideDynamicOnly || !IndicesStatic)
+			fixed(int* ptr = Indices)
 			{
-				fixed(int* ptr = Indices)
-				{
-					context.Process((uint*)ptr + IndicesOffset, !IndicesStatic);
-				}
+				context.Process((uint*)ptr + IndicesOffset);
 			}
 		}
 
 		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
 		{
-			if(!context.ProvideDynamicOnly)
+			if(context.BufferIndex == 0)
 			{
 				fixed(TStatic* ptr = StaticVertices)
 				{
-					context.Process(0, ptr + VerticesOffset, StaticVertices[0].GetDeclaration(), sizeof(TStatic), false);
+					context.Process(ptr + VerticesOffset, sizeof(TStatic));
 				}
 			}
-			fixed(TDynamic* ptr = DynamicVertices)
+			else
 			{
-				context.Process(0, ptr + VerticesOffset, DynamicVertices[0].GetDeclaration(), sizeof(TDynamic), true);
+				fixed(TDynamic* ptr = DynamicVertices)
+				{
+					context.Process(ptr + VerticesOffset, sizeof(TDynamic));
+				}
+			}
+		}
+
+		IndicesMeta IDrawableData.GetIndicesMeta()
+		{
+			return new IndicesMeta(!IndicesStatic);
+		}
+
+		VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+		{
+			if(index == 0)
+			{
+				return new VertexBufferMeta(StaticVertexDeclaration, false);
+			}
+			else
+			{
+				return new VertexBufferMeta(DynamicVertexDeclaration, true);
 			}
 		}
 	}
