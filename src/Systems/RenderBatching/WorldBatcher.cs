@@ -403,6 +403,10 @@ namespace PowerOfMind.Systems.RenderBatching
 					indicesCount = original.IndicesCount;
 					verticesCount = original.VerticesCount;
 					if(indices == null) indices = new uint[Math.Max(256, (int)original.IndicesCount)];
+					else if(indices.Length < original.IndicesCount)
+					{
+						indices = new uint[((original.IndicesCount - 1) / indices.Length + 1) * indices.Length];
+					}
 
 					hasIndices = false;
 					original.ProvideIndices(new IndicesContext(indicesProcessor, false));

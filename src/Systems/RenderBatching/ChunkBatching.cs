@@ -386,6 +386,7 @@ _fail:
 					chunkDataHelper.verticesCount = BuildTask.BLOCK_SIZE;
 					chunkDataHelper.indicesCount = 0;//Uploading only vertices
 					chunkDataHelper.indicesData = null;
+					var vertBlockOffset = new int[1];
 					for(int i = 0; i <= lastIndex; i++)
 					{
 						if(i == lastIndex)
@@ -393,7 +394,8 @@ _fail:
 							chunkDataHelper.verticesCount = task.verticesCount % BuildTask.BLOCK_SIZE;
 						}
 						chunkDataHelper.verticesData = task.verticesBlocks[i];
-						rapi.UpdateDrawable(drawableHandle, chunkDataHelper);
+						rapi.UpdateDrawablePart(drawableHandle, chunkDataHelper, 0, vertBlockOffset);
+						vertBlockOffset[0] += BuildTask.BLOCK_SIZE;
 					}
 				}
 				chunkShader.drawer = new ChunkPartDrawer(drawableHandle, task.renderPasses, task.commands, task.uniformsMap, task.uniformsData);
