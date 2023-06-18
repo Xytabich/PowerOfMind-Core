@@ -474,7 +474,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					indicesProcessor = IndicesProcessor;
 				}
 
-				public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)
+				public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)//FIX: doesnt work
 				{
 					this.original = original;
 					this.cullSides = cullSides;

@@ -2,9 +2,11 @@
 using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
+using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
 namespace PowerOfMind.Graphics
@@ -192,10 +194,11 @@ namespace PowerOfMind.Graphics
 		private bool ReloadShaders()
 		{
 			isLoaded = true;
-			var dummyShader = new ShaderProgram();
+
+			var dummyShader = new DummyShader();
 			dummyShader.VertexShader = new Vintagestory.Client.NoObf.Shader();
 			dummyShader.FragmentShader = new Vintagestory.Client.NoObf.Shader();
-			api.Shader.RegisterMemoryShaderProgram("powerofmindcore:graphicshader", dummyShader);
+			api.Shader.RegisterMemoryShaderProgram("powerofmindcore:graphicdummyshader", dummyShader);
 
 			VertexShaderDefines = dummyShader.VertexShader.PrefixCode;
 			FragmentShaderDefines = dummyShader.FragmentShader.PrefixCode;
@@ -218,6 +221,22 @@ namespace PowerOfMind.Graphics
 
 			ShaderPreprocessor.ClearCache();
 			return allCompiled;
+		}
+
+		private class DummyShader : ShaderProgram
+		{
+			private static readonly FieldInfo disposedField = typeof(ShaderProgramBase).GetField("disposed", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance);
+
+			public DummyShader()
+			{
+				disposedField.SetValue(this, true);
+			}
+
+			public override bool Compile()
+			{
+				disposedField.SetValue(this, true);
+				return true;
+			}
 		}
 	}
 }
