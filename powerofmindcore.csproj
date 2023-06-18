@@ -90,6 +90,8 @@
     <Compile Include="src\Collections\HeapCollection.cs" />
     <Compile Include="src\Collections\RefList.cs" />
     <Compile Include="src\PowerOfMindCore.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\UniformAttribute.cs" />
+    <Compile Include="src\Systems\Graphics\Shader\UniformsDeclarationUtil.cs" />
     <Compile Include="src\Systems\Graphics\TexSampler\ITextureSampler.cs" />
     <Compile Include="src\Systems\Graphics\TexSampler\TextureCompareFunc.cs" />
     <Compile Include="src\Systems\Graphics\TexSampler\TextureMagFilter.cs" />

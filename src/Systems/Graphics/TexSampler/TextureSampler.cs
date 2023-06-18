@@ -53,13 +53,13 @@ namespace PowerOfMind.Systems.Graphics
 
 		public TextureSampler SetMagFilter(TextureMagFilter filter)
 		{
-			GL.SamplerParameter(handle, SamplerParameterName.TextureWrapS, (int)(filter == TextureMagFilter.Nearest ? GLTextureMagFilter.Nearest : GLTextureMagFilter.Linear));
+			GL.SamplerParameter(handle, SamplerParameterName.TextureMagFilter, (int)(filter == TextureMagFilter.Nearest ? GLTextureMagFilter.Nearest : GLTextureMagFilter.Linear));
 			return this;
 		}
 
 		public TextureSampler SetMinFilter(TextureMinFilter filter)
 		{
-			GL.SamplerParameter(handle, SamplerParameterName.TextureWrapS, (int)texMinFilters[(int)filter]);
+			GL.SamplerParameter(handle, SamplerParameterName.TextureMinFilter, (int)texMinFilters[(int)filter]);
 			return this;
 		}
 

@@ -8,14 +8,14 @@ namespace PowerOfMind.Graphics
 	{
 		public static VertexDeclaration GetDeclarationFromStruct<T>() where T : unmanaged
 		{
-			return VertexDeclarationCache<T>.Declaration;
+			return DeclarationCache<T>.Declaration;
 		}
 
-		private static class VertexDeclarationCache<T> where T : unmanaged
+		private static class DeclarationCache<T> where T : unmanaged
 		{
 			public static readonly VertexDeclaration Declaration;
 
-			static unsafe VertexDeclarationCache()
+			static unsafe DeclarationCache()
 			{
 				var fields = typeof(T).GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
 				var attribs = new VertexAttribute[fields.Length];

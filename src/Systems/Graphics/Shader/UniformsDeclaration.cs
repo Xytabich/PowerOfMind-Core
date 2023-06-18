@@ -8,5 +8,10 @@
 		{
 			Properties = properties;
 		}
+
+		public static UniformsDeclaration FromStruct<T>() where T : unmanaged
+		{
+			return UniformsDeclarationUtil.GetDeclarationFromStruct<T>();
+		}
 	}
 }

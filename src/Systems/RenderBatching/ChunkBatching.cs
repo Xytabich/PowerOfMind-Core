@@ -38,17 +38,16 @@ namespace PowerOfMind.Systems.RenderBatching
 		private readonly ChunkDrawableData chunkDataHelper = new ChunkDrawableData();
 
 		private readonly UniformsDeclaration uniformsDeclaration = new UniformsDeclaration(
-			new UniformProperty("projectionMatrix", UniformAlias.PROJ_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
-			new UniformProperty("modelViewMatrix", UniformAlias.MV_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
-			new UniformProperty("viewMatrix", UniformAlias.VIEW_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
-			new UniformProperty("modelMatrix", UniformAlias.MODEL_MATRIX, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.SquareMatrix, 16),
-			new UniformProperty("origin", UniformAlias.MODEL_ORIGIN, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Vector, 3),
+			new UniformProperty("projectionMatrix", UniformAlias.PROJ_MATRIX, 0, EnumShaderPrimitiveType.Float, 16),
+			new UniformProperty("modelViewMatrix", UniformAlias.MV_MATRIX, 0, EnumShaderPrimitiveType.Float, 16),
+			new UniformProperty("viewMatrix", UniformAlias.VIEW_MATRIX, 0, EnumShaderPrimitiveType.Float, 16),
+			new UniformProperty("modelMatrix", UniformAlias.MODEL_MATRIX, 0, EnumShaderPrimitiveType.Float, 16),
+			new UniformProperty("origin", UniformAlias.MODEL_ORIGIN, 0, EnumShaderPrimitiveType.Float, 3),
 
-			new UniformProperty("rgbaFogIn", UniformAlias.FOG_COLOR, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Vector, 4),
-			new UniformProperty("rgbaAmbientIn", UniformAlias.AMBIENT_COLOR, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Vector, 3),
-			new UniformProperty("fogDensityIn", UniformAlias.FOG_DENSITY, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Primitive, 1),
-			new UniformProperty("fogMinIn", UniformAlias.FOG_MIN, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Primitive, 1),
-			new UniformProperty("alphaTest", UniformAlias.ALPHA_TEST, 0, EnumShaderPrimitiveType.Float, EnumUniformStructType.Primitive, 1)
+			new UniformProperty("rgbaFogIn", UniformAlias.FOG_COLOR, 0, EnumShaderPrimitiveType.Float, 4),
+			new UniformProperty("rgbaAmbientIn", UniformAlias.AMBIENT_COLOR, 0, EnumShaderPrimitiveType.Float, 3),
+			new UniformProperty("fogDensityIn", UniformAlias.FOG_DENSITY, 0, EnumShaderPrimitiveType.Float, 1),
+			new UniformProperty("fogMinIn", UniformAlias.FOG_MIN, 0, EnumShaderPrimitiveType.Float, 1)
 		);
 
 		private readonly IRenderAPI rapi;
@@ -215,8 +214,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					tmpPairs.TryGetValue(5, out var fogColor) ? fogColor : -1,
 					tmpPairs.TryGetValue(6, out var ambientColor) ? ambientColor : -1,
 					tmpPairs.TryGetValue(7, out var fogDensity) ? fogDensity : -1,
-					tmpPairs.TryGetValue(8, out var fogMin) ? fogMin : -1,
-					tmpPairs.TryGetValue(9, out var alphaTest) ? alphaTest : -1
+					tmpPairs.TryGetValue(8, out var fogMin) ? fogMin : -1
 				));
 				shaderToId[shader] = id;
 				return id;
@@ -263,7 +261,6 @@ _fail:
 					if(shader.fogColor >= 0) renderInfo.shaderUniforms[shader.fogColor].SetValue(rapi.FogColor);
 					if(shader.fogDensity >= 0) renderInfo.shaderUniforms[shader.fogDensity].SetValue(rapi.FogDensity);
 					if(shader.fogMin >= 0) renderInfo.shaderUniforms[shader.fogMin].SetValue(rapi.FogMin);
-					if(shader.alphaTest >= 0) renderInfo.shaderUniforms[shader.alphaTest].SetValue(0.001f);
 
 					renderInfo.shaderUniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
 					if(shader.mvMatrix >= 0) renderInfo.shaderUniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
@@ -589,12 +586,11 @@ _fail:
 			public readonly int ambientColor;
 			public readonly int fogDensity;
 			public readonly int fogMin;
-			public readonly int alphaTest;
 
 			public int shaderChunksChain;
 
 			public ShaderInfo(IExtendedShaderProgram shader, int projMatrix, int viewMatrix, int modelMatrix, int mvMatrix, int originPos,
-				int fogColor, int ambientColor, int fogDensity, int fogMin, int alphaTest)
+				int fogColor, int ambientColor, int fogDensity, int fogMin)
 			{
 				this.shader = shader;
 				this.projMatrix = projMatrix;
@@ -606,7 +602,6 @@ _fail:
 				this.ambientColor = ambientColor;
 				this.fogDensity = fogDensity;
 				this.fogMin = fogMin;
-				this.alphaTest = alphaTest;
 				this.shaderChunksChain = -1;
 			}
 		}
