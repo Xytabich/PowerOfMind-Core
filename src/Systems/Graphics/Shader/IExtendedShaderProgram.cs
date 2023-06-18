@@ -1,4 +1,5 @@
-﻿using Vintagestory.API.Client;
+﻿using PowerOfMind.Systems.Graphics;
+using Vintagestory.API.Client;
 
 namespace PowerOfMind.Graphics.Shader
 {
@@ -11,7 +12,7 @@ namespace PowerOfMind.Graphics.Shader
 
 		int FindUniformIndexByAlias(string alias);
 
-		void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId);
+		void SetSampler(int textureNumber, ITextureSampler sampler);
 
 		void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId, int textureNumber);
 	}

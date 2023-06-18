@@ -1,16 +1,18 @@
 ﻿using OpenTK.Graphics.OpenGL;
 using PowerOfMind.Graphics.Shader;
+using PowerOfMind.Systems.Graphics;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.Config;
-using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
 namespace PowerOfMind.Graphics
 {
+	using TextureWrapMode = OpenTK.Graphics.OpenGL.TextureWrapMode;
+
 	public partial class GraphicsSystem : ModSystem
 	{
 		public ShaderPreprocessor ShaderPreprocessor { get; private set; }
@@ -30,7 +32,8 @@ namespace PowerOfMind.Graphics
 		private bool isLoaded = false;
 
 		private List<System.Func<bool>> reloadShaderListeners = new List<System.Func<bool>>();
-		private HashSet<IShaderProgram> shaders = new HashSet<IShaderProgram>();
+		private HashSet<IExtendedShaderProgram> shaders = new HashSet<IExtendedShaderProgram>();
+		private Dictionary<string, IExtendedShaderProgram> nameToShader = new Dictionary<string, IExtendedShaderProgram>();
 
 		public override void StartClientSide(ICoreClientAPI api)
 		{
@@ -71,20 +74,45 @@ namespace PowerOfMind.Graphics
 			return shader;
 		}
 
-		public void RegisterShader(IShaderProgram shader)
+		public void RegisterShader(IExtendedShaderProgram shader)
 		{
 			if(shaders.Add(shader))
 			{
-				if(isLoaded) shader.Compile();
+				if(!string.IsNullOrEmpty(shader.PassName))
+				{
+					if(nameToShader.TryGetValue(shader.PassName, out var s))
+					{
+						shaders.Remove(s);
+						s.Dispose();
+					}
+					nameToShader[shader.PassName] = shader;
+				}
+				if(isLoaded)
+				{
+					shader.Compile();
+				}
 			}
 		}
 
-		public void UnregisterShader(IShaderProgram shader)
+		public void UnregisterShader(IExtendedShaderProgram shader)
 		{
 			if(shaders.Remove(shader))
 			{
+				if(!string.IsNullOrEmpty(shader.PassName))
+				{
+					nameToShader.Remove(shader.PassName);
+				}
 				shader.Dispose();
 			}
+		}
+
+		public IExtendedShaderProgram GetShader(string passName)
+		{
+			if(nameToShader.TryGetValue(passName, out var shader))
+			{
+				return shader;
+			}
+			return null;
 		}
 
 		internal bool TryCompileShaderStage(EnumShaderType type, string code, out int handle, out string error)
@@ -148,7 +176,7 @@ namespace PowerOfMind.Graphics
 			GL.UseProgram(0);
 		}
 
-		internal void BindTexture(EnumTextureTarget target, int textureId, int textureNumber, int sampler, bool clampTexturesToEdge)
+		internal void BindTexture(EnumTextureTarget target, int textureId, int textureNumber, ITextureSampler sampler, bool clampTexturesToEdge)
 		{
 			GL.ActiveTexture(TextureUnit.Texture0 + textureNumber);
 			var texTarget = TextureTarget.Texture2D;
@@ -167,13 +195,12 @@ namespace PowerOfMind.Graphics
 				case EnumTextureTarget.Texture2DMultisampleArray: texTarget = TextureTarget.Texture2DMultisampleArray; break;
 			}
 			GL.BindTexture(texTarget, textureId);
-			if(sampler != 0)
-			{
-				GL.BindSampler(textureNumber, sampler);
-			}
+
+			sampler?.Bind(textureNumber);
+
 			if(clampTexturesToEdge)
 			{
-				GL.TexParameter(texTarget, TextureParameterName.TextureWrapT, Convert.ToInt32(TextureWrapMode.ClampToEdge));
+				GL.TexParameter(texTarget, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 			}
 		}
 

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using PowerOfMind.Systems.Graphics;
+using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
@@ -20,6 +21,7 @@ namespace PowerOfMind.Graphics.Shader
 
 		protected Dictionary<string, int> uniformNameToIndex = new Dictionary<string, int>();
 		protected Dictionary<string, int> uniformAliasToIndex = new Dictionary<string, int>();
+		protected Dictionary<int, ITextureSampler> customSamplers = null;
 		protected readonly GraphicsSystem graphics;
 		protected ShaderStage[] stages;
 		protected int handle = 0;
@@ -139,6 +141,13 @@ namespace PowerOfMind.Graphics.Shader
 		public void Stop()
 		{
 			graphics.UnsetActiveShader();
+			if(customSamplers != null)
+			{
+				foreach(var pair in customSamplers)
+				{
+					pair.Value.Unbind(pair.Key);
+				}
+			}
 		}
 
 		public void Dispose()
@@ -151,19 +160,51 @@ namespace PowerOfMind.Graphics.Shader
 			{
 				stage.Dispose();
 			}
+
+			if(customSamplers != null)
+			{
+				foreach(var pair in customSamplers)
+				{
+					pair.Value.Release();
+				}
+				customSamplers = null;
+			}
 		}
 
-		public void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId)
+		public void SetSampler(int textureNumber, ITextureSampler sampler)
 		{
-			if(uniformIndex < 0) return;
-			BindTexture(uniformIndex, target, textureId, Uniforms[uniformIndex].ReferenceSlot);
+			if(sampler == null)
+			{
+				if(customSamplers != null && customSamplers.TryGetValue(textureNumber, out var s))
+				{
+					s.Release();
+					customSamplers.Remove(textureNumber);
+				}
+			}
+			else
+			{
+				if(customSamplers == null)
+				{
+					customSamplers = new Dictionary<int, ITextureSampler>();
+				}
+				else if(customSamplers.TryGetValue(textureNumber, out var s))
+				{
+					s.Release();
+				}
+				customSamplers[textureNumber] = sampler;
+			}
 		}
 
 		public unsafe void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId, int textureNumber)
 		{
 			if(uniformIndex < 0) return;
 			Uniforms[uniformIndex].SetValue(&textureNumber, 1);
-			graphics.BindTexture(target, textureId, textureNumber, 0, ClampTexturesToEdge);
+			ITextureSampler sampler = null;
+			if(customSamplers != null && !customSamplers.TryGetValue(textureNumber, out sampler))
+			{
+				sampler = null;
+			}
+			graphics.BindTexture(target, textureId, textureNumber, sampler, ClampTexturesToEdge);
 		}
 
 		public void BindTexture2D(string samplerName, int textureId, int textureNumber)
@@ -265,7 +306,6 @@ namespace PowerOfMind.Graphics.Shader
 				}
 			}
 			var uniforms = graphics.GetShaderUniforms(handle, name2alias);
-			var textureMap = new Dictionary<int, int>();
 			for(int i = 0; i < uniforms.Length; i++)
 			{
 				if(!string.IsNullOrEmpty(uniforms[i].Name)) uniformNameToIndex[uniforms[i].Name] = i;

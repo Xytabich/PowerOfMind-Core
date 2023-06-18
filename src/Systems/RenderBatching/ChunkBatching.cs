@@ -244,33 +244,38 @@ _fail:
 			rapi.GlMatrixModeModelView();
 			rapi.GlPushMatrix();
 			rapi.GlLoadMatrix(rapi.CameraMatrixOrigin);
+
+			RenderCall renderInfo = default;
+			renderInfo.graphics = graphics;
+			renderInfo.rapi = rapi;
+
+			var playerCamPos = capi.World.Player.Entity.CameraPos;
 			foreach(var pair in shaderToId)
 			{
 				ref readonly var shader = ref shaders[pair.Value];
 				if(shader.shaderChunksChain >= 0)
 				{
-					var prog = shader.shader;
-					var uniforms = prog.Uniforms.Properties;
-					prog.Use();
+					renderInfo.shader = shader.shader;
+					renderInfo.shaderUniforms = renderInfo.shader.Uniforms.Properties;
+					renderInfo.shader.Use();
 
-					if(shader.ambientColor >= 0) uniforms[shader.ambientColor].SetValue(rapi.AmbientColor);
-					if(shader.fogColor >= 0) uniforms[shader.fogColor].SetValue(rapi.FogColor);
-					if(shader.fogDensity >= 0) uniforms[shader.fogDensity].SetValue(rapi.FogDensity);
-					if(shader.fogMin >= 0) uniforms[shader.fogMin].SetValue(rapi.FogMin);
-					if(shader.alphaTest >= 0) uniforms[shader.alphaTest].SetValue(0.001f);
+					if(shader.ambientColor >= 0) renderInfo.shaderUniforms[shader.ambientColor].SetValue(rapi.AmbientColor);
+					if(shader.fogColor >= 0) renderInfo.shaderUniforms[shader.fogColor].SetValue(rapi.FogColor);
+					if(shader.fogDensity >= 0) renderInfo.shaderUniforms[shader.fogDensity].SetValue(rapi.FogDensity);
+					if(shader.fogMin >= 0) renderInfo.shaderUniforms[shader.fogMin].SetValue(rapi.FogMin);
+					if(shader.alphaTest >= 0) renderInfo.shaderUniforms[shader.alphaTest].SetValue(0.001f);
 
-					uniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
-					if(shader.mvMatrix >= 0) uniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
-					if(shader.viewMatrix >= 0) uniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
+					renderInfo.shaderUniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
+					if(shader.mvMatrix >= 0) renderInfo.shaderUniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
+					if(shader.viewMatrix >= 0) renderInfo.shaderUniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
 
-					var playerCamPos = capi.World.Player.Entity.CameraPos;
 					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
 					{
 						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
 						if(info.drawer != null)
 						{
-							int passIndex = info.drawer.TryGetPassIndex(pass);
-							if(passIndex >= 0)
+							renderInfo.pass = info.drawer.TryGetPassIndex(pass);
+							if(renderInfo.pass >= 0)
 							{
 								var origin = chunks[chunk.chunkId].origin;
 
@@ -278,10 +283,10 @@ _fail:
 								{
 									if(shader.modelMatrix >= 0)
 									{
-										uniforms[shader.modelMatrix].SetValue(float4x4.identity);
+										renderInfo.shaderUniforms[shader.modelMatrix].SetValue(float4x4.identity);
 									}
 
-									uniforms[shader.originPos].SetValue(
+									renderInfo.shaderUniforms[shader.originPos].SetValue(
 										new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z)));
 								}
 								else
@@ -289,14 +294,14 @@ _fail:
 									var mat = new float[16];
 									Mat4f.Identity(mat);
 									Mat4f.Translate(mat, mat, (float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z));
-									uniforms[shader.modelMatrix].SetValue(mat);
+									renderInfo.shaderUniforms[shader.modelMatrix].SetValue(mat);
 								}
 
-								info.drawer.Render(rapi, passIndex, graphics, uniforms, ref dummyBytes);
+								info.drawer.Render(ref renderInfo, ref dummyBytes);
 							}
 						}
 					}
-					prog.Stop();
+					renderInfo.shader.Stop();
 				}
 			}
 			rapi.GlPopMatrix();
@@ -801,7 +806,7 @@ _fail:
 				return -1;
 			}
 
-			public unsafe void Render(IRenderAPI rapi, int pass, GraphicsSystem graphics, UniformPropertyHandle[] shaderUniforms, ref byte[] dummyBytes)
+			public unsafe void Render(ref RenderCall callInfo, ref byte[] dummyBytes)
 			{
 				if(dummyBytes.Length < maxUniformSize)
 				{
@@ -812,22 +817,20 @@ _fail:
 				{
 					fixed(byte* zeroPtr = dummyBytes)
 					{
-						int last = renderPasses[pass].Index + renderPasses[pass].Count;
-						for(int i = renderPasses[pass].Index; i < last; i++)
+						int last = renderPasses[callInfo.pass].Index + renderPasses[callInfo.pass].Count;
+						for(int i = renderPasses[callInfo.pass].Index; i < last; i++)
 						{
 							var cmd = commands[i];
 							switch(cmd.Type)
 							{
 								case GraphicsCommandType.Draw:
-									rapi.RenderDrawable(drawableHandle, cmd.Offset, (int)cmd.Count);
+									callInfo.rapi.RenderDrawable(drawableHandle, cmd.Offset, (int)cmd.Count);
 									break;
 								case GraphicsCommandType.SetUniform:
-									shaderUniforms[uniformsMap[cmd.Index].Index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
+									callInfo.shaderUniforms[uniformsMap[cmd.Index].Index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
 									break;
 								case GraphicsCommandType.BindTexture:
-									ref readonly var shaderUniform = ref shaderUniforms[uniformsMap[cmd.Index].Index];
-									shaderUniform.SetValue(shaderUniform.ReferenceSlot);
-									graphics.BindTexture((EnumTextureTarget)cmd.Arg, *(int*)(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset)), shaderUniform.ReferenceSlot, 0, false);
+									callInfo.shader.BindTexture(uniformsMap[cmd.Index].Index, (EnumTextureTarget)cmd.Arg, *(int*)(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset)));
 									break;
 							}
 						}
@@ -835,11 +838,20 @@ _fail:
 						//Reset uniforms
 						for(int i = uniformsMap.Length - 1; i >= 0; i--)
 						{
-							shaderUniforms[uniformsMap[i].Index].SetValue(zeroPtr, uniformsMap[i].Count);
+							callInfo.shaderUniforms[uniformsMap[i].Index].SetValue(zeroPtr, uniformsMap[i].Count);
 						}
 					}
 				}
 			}
+		}
+
+		private ref struct RenderCall
+		{
+			public IRenderAPI rapi;
+			public int pass;
+			public GraphicsSystem graphics;
+			public UniformPropertyHandle[] shaderUniforms;
+			public IExtendedShaderProgram shader;
 		}
 	}
 }

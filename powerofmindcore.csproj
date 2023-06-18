@@ -90,6 +90,12 @@
     <Compile Include="src\Collections\HeapCollection.cs" />
     <Compile Include="src\Collections\RefList.cs" />
     <Compile Include="src\PowerOfMindCore.cs" />
+    <Compile Include="src\Systems\Graphics\TexSampler\ITextureSampler.cs" />
+    <Compile Include="src\Systems\Graphics\TexSampler\TextureCompareFunc.cs" />
+    <Compile Include="src\Systems\Graphics\TexSampler\TextureMagFilter.cs" />
+    <Compile Include="src\Systems\Graphics\TexSampler\TextureMinFilter.cs" />
+    <Compile Include="src\Systems\Graphics\TexSampler\TextureSampler.cs" />
+    <Compile Include="src\Systems\Graphics\TexSampler\TextureWrapMode.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuilderStructContainer.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuilderContext.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuildTask.cs" />
