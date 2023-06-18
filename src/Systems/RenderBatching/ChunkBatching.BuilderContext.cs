@@ -384,11 +384,17 @@ namespace PowerOfMind.Systems.RenderBatching
 								}
 							}
 						}
-						for(int j = 0; j < drawGroup.cmdCount; j++)
+
+						for(int j = 0, k = 0; j < drawGroup.cmdCount; k++)
 						{
-							var cmd = this.commands[drawGroup.cmdIndex + j];
+							var cmd = this.commands[drawGroup.cmdIndex + k];
+							if(cmd.type != BuildCommand.CommandType.DrawIndices)
+							{
+								continue;
+							}
 							CopyIndicesFromBlock((int)cmd.arg0, indices, indicesStart + indicesCount, (int)cmd.arg1);
 							indicesCount += cmd.arg1;
+							j++;
 						}
 					}
 					if(indicesCount > 0)

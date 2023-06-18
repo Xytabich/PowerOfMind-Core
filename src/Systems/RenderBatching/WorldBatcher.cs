@@ -86,6 +86,10 @@ namespace PowerOfMind.Systems.RenderBatching
 					chunks[id].Dispose();
 					chunks.Remove(id);
 				}
+				else
+				{
+					batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+				}
 			}
 		}
 
