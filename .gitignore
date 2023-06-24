@@ -2,3 +2,4 @@
 /powerofmindcore.pdb
 *.csproj.user
 /bin/
+/obj/

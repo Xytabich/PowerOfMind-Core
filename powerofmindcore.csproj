@@ -1,161 +1,69 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
-  <PropertyGroup>
-    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
-    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
-    <ProjectGuid>{DA019DEC-CE36-4368-BA6C-C89B00C805A4}</ProjectGuid>
-    <OutputType>Library</OutputType>
-    <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>PowerOfMind</RootNamespace>
-    <AssemblyName>powerofmindcore</AssemblyName>
-    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
-    <FileAlignment>512</FileAlignment>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
-    <DebugSymbols>true</DebugSymbols>
-    <DebugType>full</DebugType>
-    <Optimize>false</Optimize>
-    <OutputPath>..\..\bin\Debug\powerofmindcore\</OutputPath>
-    <IntermediateOutputPath>..\..\obj\Debug\powerofmindcore\</IntermediateOutputPath>
-    <DefineConstants>DEBUG;TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
-    <DebugType>pdbonly</DebugType>
-    <Optimize>true</Optimize>
-    <OutputPath>..\..\bin\Release\powerofmindcore\</OutputPath>
-    <IntermediateOutputPath>..\..\obj\Release\powerofmindcore\</IntermediateOutputPath>
-    <DefineConstants>TRACE</DefineConstants>
-    <ErrorReport>prompt</ErrorReport>
-    <WarningLevel>4</WarningLevel>
-    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="0Harmony">
-      <HintPath>..\..\..\Games\Vintagestory18\Lib\0Harmony.dll</HintPath>
-    </Reference>
-    <Reference Include="OpenTK">
-      <HintPath>..\..\..\Games\Vintagestory18\Lib\OpenTK.dll</HintPath>
-    </Reference>
-    <Reference Include="protobuf-net">
-      <HintPath>..\..\..\Games\Vintagestory18\Lib\protobuf-net.dll</HintPath>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Xml.Linq" />
-    <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="System.Data" />
-    <Reference Include="System.Net.Http" />
-    <Reference Include="System.Xml" />
-    <Reference Include="Unity.Mathematics">
-      <HintPath>.\Unity.Mathematics.dll</HintPath>
-    </Reference>
-    <Reference Include="VintagestoryAPI">
-      <HintPath>C:\Games\Vintagestory18\VintagestoryAPI.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="VintagestoryLib">
-      <HintPath>..\..\..\Games\Vintagestory18\VintagestoryLib.dll</HintPath>
-    </Reference>
-    <Reference Include="VSSurvivalMod">
-      <HintPath>C:\Games\Vintagestory18\Mods\VSSurvivalMod.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="VSEssentials">
-      <HintPath>C:\Games\Vintagestory18\Mods\VSEssentials.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="VSCreativeMod">
-      <HintPath>C:\Games\Vintagestory18\Mods\VSCreativeMod.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-    <Reference Include="Newtonsoft.Json">
-      <HintPath>C:\Games\Vintagestory18\Lib\Newtonsoft.Json.dll</HintPath>
-      <Private>False</Private>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="modinfo.json" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="assets\" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="src\AssemblyInfo.cs" />
-    <Compile Include="src\Collections\ChainList.cs" />
-    <Compile Include="src\Collections\HeapCollection.cs" />
-    <Compile Include="src\Collections\RefList.cs" />
-    <Compile Include="src\PowerOfMindCore.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\UniformAttribute.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\UniformsDeclarationUtil.cs" />
-    <Compile Include="src\Systems\Graphics\TexSampler\ITextureSampler.cs" />
-    <Compile Include="src\Systems\Graphics\TexSampler\TextureCompareFunc.cs" />
-    <Compile Include="src\Systems\Graphics\TexSampler\TextureMagFilter.cs" />
-    <Compile Include="src\Systems\Graphics\TexSampler\TextureMinFilter.cs" />
-    <Compile Include="src\Systems\Graphics\TexSampler\TextureSampler.cs" />
-    <Compile Include="src\Systems\Graphics\TexSampler\TextureWrapMode.cs" />
-    <Compile Include="src\Systems\RenderBatching\BlockLightUtil.cs" />
-    <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuilderStructContainer.cs" />
-    <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuilderContext.cs" />
-    <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuildTask.cs" />
-    <Compile Include="src\Systems\RenderBatching\ChunkBatching.cs" />
-    <Compile Include="src\Systems\RenderBatching\ChunkBatching.Helpers.cs" />
-    <Compile Include="src\Systems\RenderBatching\IBlockDataProvider.cs" />
-    <Compile Include="src\Systems\RenderBatching\VertexPositionOffsetUtil.cs" />
-    <Compile Include="src\Systems\RenderBatching\WorldBatcher.cs" />
-    <Compile Include="src\Systems\RenderBatching\RenderBatchingSystem.cs" />
-    <Compile Include="src\Systems\RenderBatching\IBatchDataBuilder.cs" />
-    <Compile Include="src\Systems\RenderBatching\IBatchBuildContext.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\IDrawableData.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\IUniformsData.cs" />
-    <Compile Include="src\Systems\Graphics\GraphicsSystem.cs" />
-    <Compile Include="src\Systems\Graphics\GraphicsSystem.ShaderPropeties.cs" />
-    <Compile Include="src\Systems\Graphics\GraphicsSystem.UniformVariableHandlers.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\IVertexStruct.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\MeshData.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\UniformAlias.cs" />
-    <Compile Include="src\Systems\Graphics\RenderExtensions.cs" />
-    <Compile Include="src\Systems\Graphics\EnumUniformStructType.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\AssetShaderProgram.cs" />
-    <Compile Include="src\Systems\Graphics\EnumTextureTarget.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ExtendedShaderProgram.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\IExtendedShaderProgram.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\IUniformVariableHandler.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderExtensions.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderInputDeclaration.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderPreprocessor.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderStage.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderUniformExtensions.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderVertexAttribute.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\StandardIncludeBindings.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\UniformProperty.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\UniformPropertyHandle.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\ShaderUniformDeclaration.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\VertexDeclarationUtil.cs" />
-    <Compile Include="src\Systems\Graphics\Shader\UniformsDeclaration.cs" />
-    <Compile Include="src\Systems\Multiblock\BlockMultiblockMain.cs" />
-    <Compile Include="src\Systems\Multiblock\BlockMultiblockSurrogate.cs" />
-    <Compile Include="src\Systems\Multiblock\IMultiblockMainBlock.cs" />
-    <Compile Include="src\Systems\Multiblock\IMultiblockPartBlock.cs" />
-    <Compile Include="src\Systems\Multiblock\IMultiblockPhantomBlock.cs" />
-    <Compile Include="src\Systems\Multiblock\MultiblockManager.cs" />
-    <Compile Include="src\Systems\Graphics\EnumShaderPrimitiveType.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\VertexAttribute.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\VertexAttributeAlias.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\VertexComponentAttribute.cs" />
-    <Compile Include="src\Systems\Graphics\Drawable\VertexDeclaration.cs" />
-    <Compile Include="src\Utils\CommonExt.cs" />
-    <Compile Include="src\Utils\XXHash32.cs" />
-  </ItemGroup>
-  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
-  <PropertyGroup>
-    <PostBuildEvent>
-copy "$(TargetPath)" "$(ProjectDir)" 
-copy "$(TargetDir)\$(TargetName).pdb" "$(ProjectDir)" 
-</PostBuildEvent>
-  </PropertyGroup>
+﻿<Project Sdk="Microsoft.NET.Sdk">
+	<PropertyGroup>
+		<LangVersion>latest</LangVersion>
+		<TargetFramework>netstandard2.0</TargetFramework>
+		<OutputType>Library</OutputType>
+		<RootNamespace>PowerOfMind</RootNamespace>
+		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+	</PropertyGroup>
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+		<OutputPath>..\..\bin\Debug\powerofmindcore\</OutputPath>
+		<IntermediateOutputPath>..\..\obj\Debug\powerofmindcore\</IntermediateOutputPath>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+	<PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+		<OutputPath>..\..\bin\Release\powerofmindcore\</OutputPath>
+		<IntermediateOutputPath>..\..\obj\Release\powerofmindcore\</IntermediateOutputPath>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+	</PropertyGroup>
+	<ItemGroup>
+		<Reference Include="0Harmony">
+			<HintPath>..\..\..\Games\Vintagestory18\Lib\0Harmony.dll</HintPath>
+		</Reference>
+		<Reference Include="OpenTK">
+			<HintPath>..\..\..\Games\Vintagestory18\Lib\OpenTK.dll</HintPath>
+		</Reference>
+		<Reference Include="protobuf-net">
+			<HintPath>..\..\..\Games\Vintagestory18\Lib\protobuf-net.dll</HintPath>
+		</Reference>
+		<Reference Include="Unity.Mathematics">
+			<HintPath>.\Unity.Mathematics.dll</HintPath>
+		</Reference>
+		<Reference Include="VintagestoryAPI">
+			<HintPath>C:\Games\Vintagestory18\VintagestoryAPI.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="VintagestoryLib">
+			<HintPath>..\..\..\Games\Vintagestory18\VintagestoryLib.dll</HintPath>
+		</Reference>
+		<Reference Include="VSSurvivalMod">
+			<HintPath>C:\Games\Vintagestory18\Mods\VSSurvivalMod.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="VSEssentials">
+			<HintPath>C:\Games\Vintagestory18\Mods\VSEssentials.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="VSCreativeMod">
+			<HintPath>C:\Games\Vintagestory18\Mods\VSCreativeMod.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="Newtonsoft.Json">
+			<HintPath>C:\Games\Vintagestory18\Lib\Newtonsoft.Json.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+	</ItemGroup>
+	<ItemGroup>
+		<Content Include="modinfo.json" />
+	</ItemGroup>
+	<ItemGroup>
+		<Folder Include="assets\" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
+		<PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
+	</ItemGroup>
+	<Target Name="PostBuild" AfterTargets="PostBuildEvent">
+		<Exec Command="copy &quot;$(TargetPath)&quot; &quot;$(ProjectDir)&quot; &#xD;&#xA;copy &quot;$(TargetDir)\$(TargetName).pdb&quot; &quot;$(ProjectDir)&quot; " />
+	</Target>
 </Project>
