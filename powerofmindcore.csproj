@@ -98,6 +98,7 @@
     <Compile Include="src\Systems\Graphics\TexSampler\TextureMinFilter.cs" />
     <Compile Include="src\Systems\Graphics\TexSampler\TextureSampler.cs" />
     <Compile Include="src\Systems\Graphics\TexSampler\TextureWrapMode.cs" />
+    <Compile Include="src\Systems\RenderBatching\BlockLightUtil.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuilderStructContainer.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuilderContext.cs" />
     <Compile Include="src\Systems\RenderBatching\ChunkBatching.BuildTask.cs" />
@@ -147,6 +148,7 @@
     <Compile Include="src\Systems\Graphics\Drawable\VertexAttributeAlias.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\VertexComponentAttribute.cs" />
     <Compile Include="src\Systems\Graphics\Drawable\VertexDeclaration.cs" />
+    <Compile Include="src\Utils\CommonExt.cs" />
     <Compile Include="src\Utils\XXHash32.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
