@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.Linq.Expressions;
 using System.Reflection;
 using Unity.Mathematics;
@@ -92,6 +93,47 @@ namespace PowerOfMind.Systems.RenderBatching
 		{
 			public fixed int outLightRGB[25];
 
+#if DEBUG
+			public int[] OutLightRGB
+			{
+				get
+				{
+					var value = new int[25];
+					for(int i = 0; i < 25; i++)
+					{
+						value[i] = outLightRGB[i];
+					}
+					return value;
+				}
+			}
+
+			public int[] CurrentChunkRgbsExt
+			{
+				get
+				{
+					var value = new int[27];
+					for(int i = 0; i < 27; i++)
+					{
+						value[i] = currentChunkRgbsExt[i];
+					}
+					return value;
+				}
+			}
+
+			public int[] NeighbourLightRGBS
+			{
+				get
+				{
+					var value = new int[9];
+					for(int i = 0; i < 9; i++)
+					{
+						value[i] = neighbourLightRGBS[i];
+					}
+					return value;
+				}
+			}
+#endif
+
 			internal int chunkSize, chunkSizeMask;
 
 			private fixed int currentChunkRgbsExt[27];
@@ -136,7 +178,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				for(tileSide = 0; tileSide < 6; tileSide++)
 				{
 					face = BlockFacing.ALLFACES[tileSide];
-					totalLight += CalcBlockFaceLight(managed, MapUtil.Index3d(face.Normali.X, face.Normali.Y, face.Normali.Z, 3, 3));
+					totalLight += CalcBlockFaceLight(managed, MapUtil.Index3d(face.Normali.X, face.Normali.Y, face.Normali.Z, 3, 3) + CENTER);
 					outLightRGB[lightRGBindex++] = currentLightRGBByCorner[0];
 					outLightRGB[lightRGBindex++] = currentLightRGBByCorner[1];
 					outLightRGB[lightRGBindex++] = currentLightRGBByCorner[2];

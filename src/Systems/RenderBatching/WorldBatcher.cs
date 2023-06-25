@@ -9,6 +9,7 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
+using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Systems.RenderBatching
@@ -45,6 +46,8 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			chunkSize = capi.World.BlockAccessor.ChunkSize;
 			bitBlockSize = (chunkSize * chunkSize * chunkSize) >> 5;
+
+			capi.Event.ChunkDirty += UpdateChunk;
 		}
 
 		public int AddProvider(IBlockDataProvider provider)
@@ -94,6 +97,38 @@ namespace PowerOfMind.Systems.RenderBatching
 		}
 
 		//TODO: add bulk, remove bulk (int3 from, int3 to, ulong[] fillMap, int providerId)
+
+		private void UpdateChunk(Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason)
+		{
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z), out var id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X + 1, chunkCoord.Y, chunkCoord.Z), out id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X - 1, chunkCoord.Y, chunkCoord.Z), out id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y + 1, chunkCoord.Z), out id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y - 1, chunkCoord.Z), out id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z + 1), out id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z - 1), out id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
+			}
+		}
 
 		private int AddBitBlock(int bitsChain)
 		{
