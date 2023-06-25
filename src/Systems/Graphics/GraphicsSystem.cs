@@ -22,7 +22,8 @@ namespace PowerOfMind.Graphics
 
 		public ILogger Logger => api.Logger;
 
-		public event System.Func<bool> OnReloadShaders { add { reloadShaderListeners.Add(value); } remove { reloadShaderListeners.Remove(value); } }
+		public event System.Action OnBeforeShadersReload { add { beforeReloadShaderListeners.Add(value); } remove { beforeReloadShaderListeners.Remove(value); } }
+		public event System.Func<bool> OnAfterShadersReload { add { afterReloadShaderListeners.Add(value); } remove { afterReloadShaderListeners.Remove(value); } }
 
 		internal ICoreClientAPI Api => api;
 
@@ -31,7 +32,8 @@ namespace PowerOfMind.Graphics
 
 		private bool isLoaded = false;
 
-		private List<System.Func<bool>> reloadShaderListeners = new List<System.Func<bool>>();
+		private List<System.Action> beforeReloadShaderListeners = new List<System.Action>();
+		private List<System.Func<bool>> afterReloadShaderListeners = new List<System.Func<bool>>();
 		private HashSet<IExtendedShaderProgram> shaders = new HashSet<IExtendedShaderProgram>();
 		private Dictionary<string, IExtendedShaderProgram> nameToShader = new Dictionary<string, IExtendedShaderProgram>();
 
@@ -41,8 +43,6 @@ namespace PowerOfMind.Graphics
 			uniformHandlers = new UniformVariableHandlers();
 			ShaderPreprocessor = new ShaderPreprocessor(this);
 			api.Event.ReloadShader += ReloadShaders;
-
-			api.ModLoader.GetModSystem<GraphicsSystem>().LoadAssetShader("testmod:testshader", new AssetLocation("standard"));
 		}
 
 		public override void Dispose()
@@ -53,7 +53,8 @@ namespace PowerOfMind.Graphics
 				shader.Dispose();
 			}
 			shaders.Clear();
-			reloadShaderListeners.Clear();
+			beforeReloadShaderListeners.Clear();
+			afterReloadShaderListeners.Clear();
 		}
 
 		/// <summary>
@@ -230,20 +231,25 @@ namespace PowerOfMind.Graphics
 			VertexShaderDefines = dummyShader.VertexShader.PrefixCode;
 			FragmentShaderDefines = dummyShader.FragmentShader.PrefixCode;
 
+			for(int i = beforeReloadShaderListeners.Count - 1; i >= 0; i--)
+			{
+				beforeReloadShaderListeners[i].Invoke();
+			}
+
 			foreach(var shader in shaders)
 			{
 				shader.Dispose();
 			}
 
 			bool allCompiled = true;
-			foreach(var listener in reloadShaderListeners)
-			{
-				allCompiled &= listener();
-			}
-
 			foreach(var shader in shaders)
 			{
 				allCompiled &= shader.Compile();
+			}
+
+			for(int i = afterReloadShaderListeners.Count - 1; i >= 0; i--)
+			{
+				allCompiled &= afterReloadShaderListeners[i].Invoke();
 			}
 
 			ShaderPreprocessor.ClearCache();

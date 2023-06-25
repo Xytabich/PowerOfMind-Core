@@ -64,7 +64,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "powerofmindcore:chunkrenderer");
-			graphics.OnReloadShaders += ReloadAll;
+			graphics.OnAfterShadersReload += ReloadAll;
 		}
 
 		public int AddBuilder<TVertex, TUniform>(int3 chunk, IExtendedShaderProgram shader, IBatchDataBuilder builder, in TVertex vertexStruct, in TUniform uniformStruct)
@@ -177,11 +177,22 @@ namespace PowerOfMind.Systems.RenderBatching
 						rebuildStructs.Add(chunk.chunkShaderId);
 					}
 				}
+				UpdateShader(pair.Key, pair.Value);
 			}
 			return true;
 		}
 
 		private int AddShader(IExtendedShaderProgram shader)
+		{
+			int id = shaders.Allocate();
+			shaders[id].shaderChunksChain = -1;
+
+			UpdateShader(shader, id);
+			shaderToId[shader] = id;
+			return id;
+		}
+
+		private void UpdateShader(IExtendedShaderProgram shader, int id)
 		{
 			tmpPairs.Clear();
 			shader.MapDeclaration(uniformsDeclaration, tmpPairs);
@@ -210,14 +221,14 @@ namespace PowerOfMind.Systems.RenderBatching
 					goto _fail;
 				}
 
-				int id = shaders.Add(new ShaderInfo(shader, projMatrix, viewMatrix, modelMatrix, mvMatrix, originPos,
+				shaders[id] = new ShaderInfo(shader, projMatrix, viewMatrix, modelMatrix, mvMatrix, originPos,
 					tmpPairs.TryGetValue(5, out var fogColor) ? fogColor : -1,
 					tmpPairs.TryGetValue(6, out var ambientColor) ? ambientColor : -1,
 					tmpPairs.TryGetValue(7, out var fogDensity) ? fogDensity : -1,
-					tmpPairs.TryGetValue(8, out var fogMin) ? fogMin : -1
-				));
-				shaderToId[shader] = id;
-				return id;
+					tmpPairs.TryGetValue(8, out var fogMin) ? fogMin : -1,
+					shaders[id].shaderChunksChain
+				);
+				return;
 			}
 
 _fail:
@@ -590,7 +601,7 @@ _fail:
 			public int shaderChunksChain;
 
 			public ShaderInfo(IExtendedShaderProgram shader, int projMatrix, int viewMatrix, int modelMatrix, int mvMatrix, int originPos,
-				int fogColor, int ambientColor, int fogDensity, int fogMin)
+				int fogColor, int ambientColor, int fogDensity, int fogMin, int shaderChunksChain)
 			{
 				this.shader = shader;
 				this.projMatrix = projMatrix;
@@ -602,7 +613,7 @@ _fail:
 				this.ambientColor = ambientColor;
 				this.fogDensity = fogDensity;
 				this.fogMin = fogMin;
-				this.shaderChunksChain = -1;
+				this.shaderChunksChain = shaderChunksChain;
 			}
 		}
 

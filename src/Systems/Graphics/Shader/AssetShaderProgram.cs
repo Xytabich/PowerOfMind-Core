@@ -89,16 +89,12 @@ namespace PowerOfMind.Graphics.Shader
 						}
 					}
 				}
-				if(createUseBindings != null)
+				if(useBindings != null)
 				{
-					var action = createUseBindings(this);
-					if(action != null)
-					{
-						if(bindings == null) bindings = new List<Action>();
-						bindings.Add(action);
-					}
+					if(bindings == null) bindings = new List<Action>();
+					bindings.AddRange(useBindings);
 				}
-				this.useBindings = bindings?.ToArray();
+				useBindings = bindings?.ToArray();
 				return true;
 			}
 			return false;

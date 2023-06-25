@@ -123,6 +123,15 @@ namespace PowerOfMind.Graphics.Shader
 
 			InitInputDeclaration();
 			InitUniformDeclaration();
+
+			if(customSamplers != null)
+			{
+				foreach(var pair in customSamplers)
+				{
+					pair.Value.Allocate();
+				}
+			}
+
 			return true;
 		}
 
@@ -167,7 +176,6 @@ namespace PowerOfMind.Graphics.Shader
 				{
 					pair.Value.Release();
 				}
-				customSamplers = null;
 			}
 		}
 
@@ -177,7 +185,7 @@ namespace PowerOfMind.Graphics.Shader
 			{
 				if(customSamplers != null && customSamplers.TryGetValue(textureNumber, out var s))
 				{
-					s.Release();
+					if(handle != 0) s.Release();
 					customSamplers.Remove(textureNumber);
 				}
 			}
@@ -189,9 +197,10 @@ namespace PowerOfMind.Graphics.Shader
 				}
 				else if(customSamplers.TryGetValue(textureNumber, out var s))
 				{
-					s.Release();
+					if(handle != 0) s.Release();
 				}
 				customSamplers[textureNumber] = sampler;
+				if(handle != 0) sampler.Allocate();
 			}
 		}
 
@@ -306,6 +315,8 @@ namespace PowerOfMind.Graphics.Shader
 				}
 			}
 			var uniforms = graphics.GetShaderUniforms(handle, name2alias);
+			uniformNameToIndex.Clear();
+			uniformAliasToIndex.Clear();
 			for(int i = 0; i < uniforms.Length; i++)
 			{
 				if(!string.IsNullOrEmpty(uniforms[i].Name)) uniformNameToIndex[uniforms[i].Name] = i;

@@ -280,7 +280,7 @@ namespace PowerOfMind.Systems.RenderBatching
 								if((cullSides & CULL_ALL) == CULL_ALL) continue;
 								batchBuildContext.cullSides = cullSides;
 								batchBuildContext.blockOffset = pos;
-								provider.ProvideData(pos, batchBuildContext);
+								provider.ProvideData(pos + origin, batchBuildContext);
 							}
 						}
 					}
