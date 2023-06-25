@@ -9,7 +9,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
-using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Systems.RenderBatching
@@ -20,6 +19,8 @@ namespace PowerOfMind.Systems.RenderBatching
 	{
 		[ThreadStatic]
 		private static ChunkBatchBuildContext batchBuildContext = null;
+
+		private readonly RenderBatchingSystem mod;
 
 		private readonly Dictionary<int3, int> chunkToId = new Dictionary<int3, int>();
 		private readonly HeapCollection<ChunkBuilder> chunks = new HeapCollection<ChunkBuilder>();
@@ -39,15 +40,14 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		public WorldBatcher(ICoreClientAPI capi, IExtendedShaderProgram shader, in TVertex vertexStruct, in TUniform uniformStruct)
 		{
-			this.batchingSystem = capi.ModLoader.GetModSystem<RenderBatchingSystem>().ChunkBatcher;
+			mod = capi.ModLoader.GetModSystem<RenderBatchingSystem>();
+			this.batchingSystem = mod.ChunkBatcher;
 			this.shader = shader;
 			this.vertexStruct = vertexStruct;
 			this.uniformStruct = uniformStruct;
 
 			chunkSize = capi.World.BlockAccessor.ChunkSize;
 			bitBlockSize = (chunkSize * chunkSize * chunkSize) >> 5;
-
-			capi.Event.ChunkDirty += UpdateChunk;
 		}
 
 		public int AddProvider(IBlockDataProvider provider)
@@ -69,6 +69,8 @@ namespace PowerOfMind.Systems.RenderBatching
 				builder.batchingId = batchingSystem.AddBuilder(offset, shader, builder, vertexStruct, uniformStruct);
 				id = chunks.Add(builder);
 				chunkToId[offset] = id;
+
+				mod.RegisterChunkDirtyListener(offset, UpdateChunk);
 			}
 			pos %= chunkSize;
 			chunks[id].AddBlock(GetBlockIndex(ref pos), providerId);
@@ -88,6 +90,8 @@ namespace PowerOfMind.Systems.RenderBatching
 					batchingSystem.RemoveBuilder(chunks[id].batchingId);
 					chunks[id].Dispose();
 					chunks.Remove(id);
+
+					mod.UnregisterChunkDirtyListener(offset, UpdateChunk);
 				}
 				else
 				{
@@ -98,33 +102,9 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		//TODO: add bulk, remove bulk (int3 from, int3 to, ulong[] fillMap, int providerId)
 
-		private void UpdateChunk(Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason)
+		private void UpdateChunk(int3 chunkCoord)
 		{
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z), out var id))
-			{
-				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
-			}
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X + 1, chunkCoord.Y, chunkCoord.Z), out id))
-			{
-				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
-			}
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X - 1, chunkCoord.Y, chunkCoord.Z), out id))
-			{
-				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
-			}
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y + 1, chunkCoord.Z), out id))
-			{
-				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
-			}
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y - 1, chunkCoord.Z), out id))
-			{
-				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
-			}
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z + 1), out id))
-			{
-				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
-			}
-			if(chunkToId.TryGetValue(new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z - 1), out id))
+			if(chunkToId.TryGetValue(chunkCoord, out var id))
 			{
 				batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
 			}

@@ -62,7 +62,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			this.rapi = capi.Render;
 			this.graphics = graphics;
 
-			capi.Event.RegisterRenderer(this, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
+			capi.Event.RegisterRenderer(new DummyRenderer() { action = Update, RenderOrder = 0.991f, RenderRange = 0 }, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "powerofmindcore:chunkrenderer");
 			graphics.OnAfterShadersReload += ReloadAll;
 		}
@@ -131,14 +131,14 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		void IRenderer.OnRenderFrame(float deltaTime, EnumRenderStage stage)
 		{
-			switch(stage)
+			if(shaders.Count > 0)
 			{
-				case EnumRenderStage.Before:
-					Update();
-					break;
-				case EnumRenderStage.Opaque://TODO: add another passes
-					if(shaders.Count > 0) RenderStage(EnumChunkRenderPass.Opaque);
-					break;
+				switch(stage)
+				{
+					case EnumRenderStage.Opaque://TODO: add another passes
+						RenderStage(EnumChunkRenderPass.Opaque);
+						break;
+				}
 			}
 		}
 
@@ -315,7 +315,7 @@ _fail:
 			rapi.GlPopMatrix();
 		}
 
-		private void Update()
+		private void Update(float dt)
 		{
 			while(removeBuilderQueue.Count > 0)
 			{

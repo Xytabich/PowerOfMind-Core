@@ -3,9 +3,9 @@ using System;
 
 namespace PowerOfMind.Systems.Graphics
 {
-	using GLTextureWrapMode = OpenTK.Graphics.OpenGL.TextureWrapMode;
-	using GLTextureMinFilter = OpenTK.Graphics.OpenGL.TextureMinFilter;
 	using GLTextureMagFilter = OpenTK.Graphics.OpenGL.TextureMagFilter;
+	using GLTextureMinFilter = OpenTK.Graphics.OpenGL.TextureMinFilter;
+	using GLTextureWrapMode = OpenTK.Graphics.OpenGL.TextureWrapMode;
 	public class TextureSampler : IDisposable, ITextureSampler
 	{
 		private const GLTextureMagFilter MAGFILTER_DEFAULT = GLTextureMagFilter.Linear;

@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace PowerOfMind.Graphics.Shader
+﻿namespace PowerOfMind.Graphics.Shader
 {
 	public readonly struct ShaderUniformDeclaration
 	{

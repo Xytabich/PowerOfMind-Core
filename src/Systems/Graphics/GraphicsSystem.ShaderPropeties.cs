@@ -2,6 +2,7 @@
 using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace PowerOfMind.Graphics
 {
@@ -13,6 +14,7 @@ namespace PowerOfMind.Graphics
 			GL.GetProgram(handle, GetProgramParameterName.ActiveAttributeMaxLength, out int maxNameLen);
 			maxNameLen = (maxNameLen + 1) * 2;
 			var attributes = new ShaderVertexAttribute[count];
+			StringBuilder sb = null;
 			for(int i = 0; i < count; i++)
 			{
 				GL.GetActiveAttrib(handle, i, maxNameLen, out _, out int size, out var type, out var name);
@@ -57,6 +59,22 @@ namespace PowerOfMind.Graphics
 					default: compType = EnumShaderPrimitiveType.Unknown; break;
 				}
 
+				int arrayOpIndex = name.IndexOf("[0]");
+				if(arrayOpIndex >= 0)
+				{
+					if(sb == null) sb = new StringBuilder(maxNameLen);
+					else sb.Clear();
+					sb.Append(name);
+					int offset = 0;
+					while(arrayOpIndex >= 0)
+					{
+						sb.Remove(arrayOpIndex - offset, 3);
+						offset += 3;
+						arrayOpIndex = name.IndexOf("[0]", arrayOpIndex + 3);
+					}
+					name = sb.ToString();
+				}
+
 				string alias;
 				if(aliasByName == null || !aliasByName.TryGetValue(name, out alias))
 				{
@@ -73,6 +91,7 @@ namespace PowerOfMind.Graphics
 			GL.GetProgram(handle, GetProgramParameterName.ActiveUniformMaxLength, out int maxNameLen);
 			maxNameLen = (maxNameLen + 1) * 2;
 			var uniforms = new UniformPropertyHandle[count];
+			StringBuilder sb = null;
 			for(int i = 0; i < count; i++)
 			{
 				GL.GetActiveUniform(handle, i, maxNameLen, out _, out int size, out var type, out var name);
@@ -187,6 +206,23 @@ namespace PowerOfMind.Graphics
 					case ActiveUniformType.UnsignedIntAtomicCounter: structType = EnumUniformStructType.UnsignedIntAtomicCounter; compType = EnumShaderPrimitiveType.Int; break;
 					default: compType = EnumShaderPrimitiveType.Unknown; break;
 				}
+
+				int arrayOpIndex = name.IndexOf("[0]");
+				if(arrayOpIndex >= 0)
+				{
+					if(sb == null) sb = new StringBuilder(maxNameLen);
+					else sb.Clear();
+					sb.Append(name);
+					int offset = 0;
+					while(arrayOpIndex >= 0)
+					{
+						sb.Remove(arrayOpIndex - offset, 3);
+						offset += 3;
+						arrayOpIndex = name.IndexOf("[0]", arrayOpIndex + 3);
+					}
+					name = sb.ToString();
+				}
+
 				string alias;
 				if(aliasByName == null || !aliasByName.TryGetValue(name, out alias))
 				{
