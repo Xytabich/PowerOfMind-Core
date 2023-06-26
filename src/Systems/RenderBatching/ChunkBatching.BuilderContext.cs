@@ -21,6 +21,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				public int builderIndex = 0;
 
 				public readonly Dictionary<int, int> uniformsMap = new Dictionary<int, int>();
+				public readonly Dictionary<int, int> tmpUniformsMap = new Dictionary<int, int>();
 				public readonly Dictionary<int, int> uniformToIndexMap = new Dictionary<int, int>();
 
 				public KeyValuePair<int, int>[][] builderVertexMaps;
@@ -43,7 +44,6 @@ namespace PowerOfMind.Systems.RenderBatching
 				private VerticesContext.ProcessorDelegate addVerticesCallback;
 
 				private readonly Dictionary<int, int> componentsToMap = new Dictionary<int, int>();
-				private readonly Dictionary<int, int> tmpUniformsMap = new Dictionary<int, int>();
 				private readonly RefList<VertexAttribute> tmpAttributes = new RefList<VertexAttribute>();
 				private readonly List<KeyValuePair<int, int>> tmpPairs = new List<KeyValuePair<int, int>>();
 
@@ -412,6 +412,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					commands = list.ToArray();
 					uniformsData = this.uniformsData.dataBuffer.ToArray();
 					uniformPointers = pointers.ToArray();
+
 					renderPasses = rpGroups.ToArray();
 				}
 

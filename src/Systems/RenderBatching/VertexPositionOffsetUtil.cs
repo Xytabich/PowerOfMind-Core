@@ -8,10 +8,10 @@ namespace PowerOfMind.Systems.RenderBatching
 {
 	public class VertexPositionOffsetUtil : IDrawableData
 	{
-		EnumDrawMode IDrawableData.DrawMode => original.DrawMode;
-		uint IDrawableData.IndicesCount => original.IndicesCount;
-		uint IDrawableData.VerticesCount => verticesCount;
-		int IDrawableData.VertexBuffersCount => original.VertexBuffersCount;
+		EnumDrawMode IDrawableInfo.DrawMode => original.DrawMode;
+		uint IDrawableInfo.IndicesCount => original.IndicesCount;
+		uint IDrawableInfo.VerticesCount => verticesCount;
+		int IDrawableInfo.VertexBuffersCount => original.VertexBuffersCount;
 
 		private readonly VerticesContext.ProcessorDelegate Process;
 
@@ -102,12 +102,12 @@ namespace PowerOfMind.Systems.RenderBatching
 			}
 		}
 
-		IndicesMeta IDrawableData.GetIndicesMeta()
+		IndicesMeta IDrawableInfo.GetIndicesMeta()
 		{
 			return original.GetIndicesMeta();
 		}
 
-		VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+		VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 		{
 			return original.GetVertexBufferMeta(index);
 		}

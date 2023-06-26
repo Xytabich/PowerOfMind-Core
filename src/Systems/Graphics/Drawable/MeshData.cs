@@ -25,10 +25,10 @@ namespace PowerOfMind.Graphics
 
 		public VertexDeclaration VertexDeclaration;
 
-		EnumDrawMode IDrawableData.DrawMode => DrawMode;
-		uint IDrawableData.IndicesCount => (uint)IndicesCount;
-		uint IDrawableData.VerticesCount => (uint)VerticesCount;
-		int IDrawableData.VertexBuffersCount => 1;
+		EnumDrawMode IDrawableInfo.DrawMode => DrawMode;
+		uint IDrawableInfo.IndicesCount => (uint)IndicesCount;
+		uint IDrawableInfo.VerticesCount => (uint)VerticesCount;
+		int IDrawableInfo.VertexBuffersCount => 1;
 
 		public MeshData(T[] vertices, int[] indices)
 		{
@@ -68,12 +68,12 @@ namespace PowerOfMind.Graphics
 			}
 		}
 
-		IndicesMeta IDrawableData.GetIndicesMeta()
+		IndicesMeta IDrawableInfo.GetIndicesMeta()
 		{
 			return new IndicesMeta(!IndicesStatic);
 		}
 
-		VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+		VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 		{
 			return new VertexBufferMeta(VertexDeclaration, !VerticesStatic);
 		}
@@ -102,10 +102,10 @@ namespace PowerOfMind.Graphics
 		public VertexDeclaration StaticVertexDeclaration;
 		public VertexDeclaration DynamicVertexDeclaration;
 
-		EnumDrawMode IDrawableData.DrawMode => DrawMode;
-		uint IDrawableData.IndicesCount => (uint)IndicesCount;
-		uint IDrawableData.VerticesCount => (uint)VerticesCount;
-		int IDrawableData.VertexBuffersCount => 1;
+		EnumDrawMode IDrawableInfo.DrawMode => DrawMode;
+		uint IDrawableInfo.IndicesCount => (uint)IndicesCount;
+		uint IDrawableInfo.VerticesCount => (uint)VerticesCount;
+		int IDrawableInfo.VertexBuffersCount => 1;
 
 		public MeshData(TStatic[] staticVertices, TDynamic[] dynamicVertices, int[] indices)
 		{
@@ -146,12 +146,12 @@ namespace PowerOfMind.Graphics
 			}
 		}
 
-		IndicesMeta IDrawableData.GetIndicesMeta()
+		IndicesMeta IDrawableInfo.GetIndicesMeta()
 		{
 			return new IndicesMeta(!IndicesStatic);
 		}
 
-		VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+		VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 		{
 			if(index == 0)
 			{

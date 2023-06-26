@@ -9,6 +9,8 @@ using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
+using Vintagestory.Client;
+using Vintagestory.Client.NoObf;
 
 namespace PowerOfMind.Systems.RenderBatching
 {
@@ -55,6 +57,8 @@ namespace PowerOfMind.Systems.RenderBatching
 		private readonly GraphicsSystem graphics;
 
 		private byte[] dummyBytes = new byte[256];
+		private IExtendedShaderProgram shadowShader = null;
+		private int shadowOriginPos;
 
 		public ChunkBatching(ICoreClientAPI capi, GraphicsSystem graphics)
 		{
@@ -64,6 +68,8 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			capi.Event.RegisterRenderer(new DummyRenderer() { action = Update, RenderOrder = 0.991f, RenderRange = 0 }, EnumRenderStage.Before, "powerofmindcore:chunkrenderer");
 			capi.Event.RegisterRenderer(this, EnumRenderStage.Opaque, "powerofmindcore:chunkrenderer");
+			capi.Event.RegisterRenderer(this, EnumRenderStage.ShadowFar, "powerofmindcore:chunkrenderer");
+			capi.Event.RegisterRenderer(this, EnumRenderStage.ShadowNear, "powerofmindcore:chunkrenderer");
 			graphics.OnAfterShadersReload += ReloadAll;
 		}
 
@@ -136,7 +142,24 @@ namespace PowerOfMind.Systems.RenderBatching
 				switch(stage)
 				{
 					case EnumRenderStage.Opaque://TODO: add another passes
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-begin");
 						RenderStage(EnumChunkRenderPass.Opaque);
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-opaque");
+						RenderStage(EnumChunkRenderPass.TopSoil);
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-topsoil");
+						RenderStage(EnumChunkRenderPass.BlendNoCull);
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-blend");
+						RenderStage(EnumChunkRenderPass.OpaqueNoCull);
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-nocull");
+						break;
+					case EnumRenderStage.ShadowFar:
+					case EnumRenderStage.ShadowNear:
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-shadowbegin");
+						RenderShadow(EnumChunkRenderPass.Opaque);
+						RenderShadow(EnumChunkRenderPass.TopSoil);
+						RenderShadow(EnumChunkRenderPass.BlendNoCull);
+						RenderShadow(EnumChunkRenderPass.OpaqueNoCull);
+						ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-shadowend");
 						break;
 				}
 			}
@@ -179,6 +202,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				}
 				UpdateShader(pair.Key, pair.Value);
 			}
+			shadowShader = null;
 			return true;
 		}
 
@@ -249,7 +273,15 @@ _fail:
 					rapi.GlEnableCullFace();
 					break;
 			}
-			rapi.GlToggleBlend(true);
+			switch(pass)
+			{
+				case EnumChunkRenderPass.OpaqueNoCull:
+					rapi.GlToggleBlend(false);
+					break;
+				default:
+					rapi.GlToggleBlend(true);
+					break;
+			}
 			rapi.GlMatrixModeModelView();
 			rapi.GlPushMatrix();
 			rapi.GlLoadMatrix(rapi.CameraMatrixOrigin);
@@ -266,17 +298,8 @@ _fail:
 				{
 					renderInfo.shader = shader.shader;
 					renderInfo.shaderUniforms = renderInfo.shader.Uniforms.Properties;
-					renderInfo.shader.Use();
 
-					if(shader.ambientColor >= 0) renderInfo.shaderUniforms[shader.ambientColor].SetValue(rapi.AmbientColor);
-					if(shader.fogColor >= 0) renderInfo.shaderUniforms[shader.fogColor].SetValue(rapi.FogColor);
-					if(shader.fogDensity >= 0) renderInfo.shaderUniforms[shader.fogDensity].SetValue(rapi.FogDensity);
-					if(shader.fogMin >= 0) renderInfo.shaderUniforms[shader.fogMin].SetValue(rapi.FogMin);
-
-					renderInfo.shaderUniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
-					if(shader.mvMatrix >= 0) renderInfo.shaderUniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
-					if(shader.viewMatrix >= 0) renderInfo.shaderUniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
-
+					bool useShader = true;
 					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
 					{
 						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
@@ -285,6 +308,21 @@ _fail:
 							renderInfo.pass = info.drawer.TryGetPassIndex(pass);
 							if(renderInfo.pass >= 0)
 							{
+								if(useShader)
+								{
+									useShader = false;
+
+									renderInfo.shader.Use();
+									if(shader.ambientColor >= 0) renderInfo.shaderUniforms[shader.ambientColor].SetValue(rapi.AmbientColor);
+									if(shader.fogColor >= 0) renderInfo.shaderUniforms[shader.fogColor].SetValue(rapi.FogColor);
+									if(shader.fogDensity >= 0) renderInfo.shaderUniforms[shader.fogDensity].SetValue(rapi.FogDensity);
+									if(shader.fogMin >= 0) renderInfo.shaderUniforms[shader.fogMin].SetValue(rapi.FogMin);
+
+									renderInfo.shaderUniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
+									if(shader.mvMatrix >= 0) renderInfo.shaderUniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
+									if(shader.viewMatrix >= 0) renderInfo.shaderUniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
+								}
+
 								var origin = chunks[chunk.chunkId].origin;
 
 								if(shader.originPos >= 0)
@@ -309,14 +347,77 @@ _fail:
 							}
 						}
 					}
-					renderInfo.shader.Stop();
+					if(!useShader) renderInfo.shader.Stop();
 				}
 			}
 			rapi.GlPopMatrix();
 		}
 
+		private void RenderShadow(EnumChunkRenderPass pass)
+		{
+			rapi.GLDepthMask(true);
+			rapi.GlToggleBlend(false);
+			rapi.GLEnableDepthTest();
+
+			switch(pass)
+			{
+				case EnumChunkRenderPass.OpaqueNoCull:
+				case EnumChunkRenderPass.BlendNoCull:
+					rapi.GlDisableCullFace();
+					break;
+				default:
+					rapi.GlEnableCullFace();
+					break;
+			}
+
+			RenderCall renderInfo = default;
+			renderInfo.graphics = graphics;
+			renderInfo.rapi = rapi;
+			renderInfo.shader = shadowShader;
+			renderInfo.shaderUniforms = shadowShader.Uniforms.Properties;
+
+			var playerCamPos = capi.World.Player.Entity.CameraPos;
+			var camPos = new double3(playerCamPos.X, playerCamPos.Y, playerCamPos.Z);
+			foreach(var pair in shaderToId)
+			{
+				ref readonly var shader = ref shaders[pair.Value];
+				if(shader.shaderChunksChain >= 0)
+				{
+					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
+					{
+						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
+						if(info.drawer != null)
+						{
+							renderInfo.pass = info.drawer.TryGetPassIndex(pass);
+							if(renderInfo.pass >= 0)
+							{
+								renderInfo.shaderUniforms[shadowOriginPos].SetValue((float3)(chunks[chunk.chunkId].origin - camPos));
+
+								info.drawer.RenderShadow(ref renderInfo, ref dummyBytes);
+							}
+						}
+					}
+				}
+			}
+			rapi.GlToggleBlend(true);
+		}
+
 		private void Update(float dt)
 		{
+			ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-updatebegin");
+			if(ClientSettings.ShadowMapQuality > 0 && shadowShader == null)
+			{
+				shadowShader = graphics.ExtendStandardShader(ShaderPrograms.Shadowmapgeneric, new Dictionary<string, string>() {
+					{ "vertexPositionIn", VertexAttributeAlias.POSITION },
+					{ "uvIn", VertexAttributeAlias.TEXCOORD_0 },
+					{ "rgbaLightIn", VertexAttributeAlias.LIGHT },
+					{ "renderFlagsIn", VertexAttributeAlias.FLAGS }
+				}, new Dictionary<string, string>() {
+					{ "tex2d", UniformAlias.MAIN_TEXTURE }
+				});
+				shadowOriginPos = shadowShader.FindUniformIndex("origin");
+			}
+
 			while(removeBuilderQueue.Count > 0)
 			{
 				ReduceBuilderUsage(removeBuilderQueue.Dequeue());
@@ -339,6 +440,7 @@ _fail:
 
 				tmpTasksList.Clear();
 			}
+			ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-updateend");
 		}
 
 		private void ProcessCompletedTask(BuildTask task)
@@ -365,18 +467,19 @@ _fail:
 				chunkDataHelper.indicesCount = task.indicesCount;
 				chunkDataHelper.vertexDeclaration = task.declaration;
 
-				var drawableHandle = chunkShader.drawer?.drawableHandle;
+				var drawHandle = chunkShader.drawer?.drawHandle;
+				var shadowHandle = chunkShader.drawer?.shadowHandle;
 				if(task.verticesBlocks.Count == 1)
 				{
 					chunkDataHelper.verticesData = task.verticesBlocks[0];
 					chunkDataHelper.indicesData = task.indices;
-					if(drawableHandle == null)
+					if(drawHandle == null)
 					{
-						drawableHandle = rapi.UploadDrawable(chunkDataHelper);
+						drawHandle = rapi.UploadDrawable(chunkDataHelper);
 					}
 					else
 					{
-						rapi.ReuploadDrawable(drawableHandle, chunkDataHelper, true);
+						rapi.ReuploadDrawable(drawHandle, chunkDataHelper, true);
 					}
 				}
 				else
@@ -385,13 +488,13 @@ _fail:
 
 					//First allocate the required size (i.e. a null pointer will just allocate the buffer and won't upload any data)
 					chunkDataHelper.verticesData = null;
-					if(drawableHandle == null)
+					if(drawHandle == null)
 					{
-						drawableHandle = rapi.UploadDrawable(chunkDataHelper);
+						drawHandle = rapi.UploadDrawable(chunkDataHelper);
 					}
 					else
 					{
-						rapi.ReuploadDrawable(drawableHandle, chunkDataHelper, true);
+						rapi.ReuploadDrawable(drawHandle, chunkDataHelper, true);
 					}
 
 					//Then uploading data block-by-block
@@ -407,11 +510,31 @@ _fail:
 							chunkDataHelper.verticesCount = task.verticesCount % BuildTask.BLOCK_SIZE;
 						}
 						chunkDataHelper.verticesData = task.verticesBlocks[i];
-						rapi.UpdateDrawablePart(drawableHandle, chunkDataHelper, 0, vertBlockOffset);
+						rapi.UpdateDrawablePart(drawHandle, chunkDataHelper, 0, vertBlockOffset);
 						vertBlockOffset[0] += BuildTask.BLOCK_SIZE;
 					}
 				}
-				chunkShader.drawer = new ChunkPartDrawer(drawableHandle, task.renderPasses, task.commands, task.uniformsMap, task.uniformsData);
+
+				if(!task.shadowDeclaration.IsEmpty)
+				{
+					chunkDataHelper.vertexDeclaration = task.shadowDeclaration;
+
+					if(shadowHandle == null)
+					{
+						shadowHandle = rapi.CreateDrawableProxy(drawHandle, chunkDataHelper);
+					}
+					else
+					{
+						rapi.UpdateDrawableProxy(drawHandle, shadowHandle, chunkDataHelper);
+					}
+				}
+				else if(shadowHandle != null)
+				{
+					shadowHandle.Dispose();
+					shadowHandle = null;
+				}
+
+				chunkShader.drawer = new ChunkPartDrawer(drawHandle, shadowHandle, task.renderPasses, task.commands, task.uniformsMap, task.shadowUniformsMap, task.uniformsData);
 
 				chunkDataHelper.Clear();
 			}
@@ -452,7 +575,7 @@ _fail:
 				builders[id].usageCounter++;
 			}
 			while(builders.TryGetNextId(chunkShaderInfo.buildersChain, id, out id));
-			tmpTasksList.Add(new BuildTask(this, shaders[chunkShaders[chunkShaderId].shaderId].shader, tmpIdsList.ToArray(), 1, chunkShaderId));
+			tmpTasksList.Add(new BuildTask(this, shaders[chunkShaders[chunkShaderId].shaderId].shader, shadowShader, tmpIdsList.ToArray(), 1, chunkShaderId));
 		}
 
 		private EnumReduceUsageResult ReduceBuilderUsage(int id)
@@ -758,19 +881,23 @@ _fail:
 
 		private class ChunkPartDrawer
 		{
-			public readonly IDrawableHandle drawableHandle;
+			public readonly IDrawableHandle drawHandle;
+			public readonly IDrawableHandle shadowHandle;
 			private readonly RenderPassGroup[] renderPasses;
 			private readonly GraphicsCommand[] commands;
 			private readonly UniformPointer[] uniformsMap;
+			private readonly int[] shadowUniformsMap;
 			private readonly byte[] uniformsData;
 			private readonly int maxUniformSize;
 
-			public ChunkPartDrawer(IDrawableHandle drawableHandle, RenderPassGroup[] renderPasses, GraphicsCommand[] commands, UniformPointer[] uniformsMap, byte[] uniformsData)
+			public ChunkPartDrawer(IDrawableHandle drawHandle, IDrawableHandle shadowHandle, RenderPassGroup[] renderPasses, GraphicsCommand[] commands, UniformPointer[] uniformsMap, int[] shadowUniformsMap, byte[] uniformsData)
 			{
-				this.drawableHandle = drawableHandle;
+				this.drawHandle = drawHandle;
+				this.shadowHandle = shadowHandle;
 				this.renderPasses = renderPasses;
 				this.commands = commands;
 				this.uniformsMap = uniformsMap;
+				this.shadowUniformsMap = shadowUniformsMap;
 				this.uniformsData = uniformsData;
 
 				maxUniformSize = 0;
@@ -782,7 +909,8 @@ _fail:
 
 			public void Dispose()
 			{
-				drawableHandle.Dispose();
+				drawHandle.Dispose();
+				shadowHandle?.Dispose();
 			}
 
 			public int TryGetPassIndex(EnumChunkRenderPass renderPass)
@@ -812,6 +940,57 @@ _fail:
 				return -1;
 			}
 
+			public unsafe void RenderShadow(ref RenderCall callInfo, ref byte[] dummyBytes)
+			{
+				if(dummyBytes.Length < maxUniformSize)
+				{
+					dummyBytes = new byte[maxUniformSize];
+				}
+
+				fixed(byte* dataPtr = uniformsData)
+				{
+					fixed(byte* zeroPtr = dummyBytes)
+					{
+						int last = renderPasses[callInfo.pass].Index + renderPasses[callInfo.pass].Count;
+						int index;
+						for(int i = renderPasses[callInfo.pass].Index; i < last; i++)
+						{
+							var cmd = commands[i];
+							switch(cmd.Type)
+							{
+								case GraphicsCommandType.Draw:
+									callInfo.rapi.RenderDrawable(drawHandle, cmd.Offset, (int)cmd.Count);
+									break;
+								case GraphicsCommandType.SetUniform:
+									index = shadowUniformsMap[cmd.Index];
+									if(index >= 0)
+									{
+										callInfo.shaderUniforms[index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
+									}
+									break;
+								case GraphicsCommandType.BindTexture:
+									index = shadowUniformsMap[cmd.Index];
+									if(index >= 0)
+									{
+										callInfo.shader.BindTexture(index, (EnumTextureTarget)cmd.Arg, *(int*)(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset)));
+									}
+									break;
+							}
+						}
+
+						//Reset uniforms
+						for(int i = shadowUniformsMap.Length - 1; i >= 0; i--)
+						{
+							index = shadowUniformsMap[i];
+							if(index >= 0)
+							{
+								callInfo.shaderUniforms[index].SetValue(zeroPtr, uniformsMap[i].Count);
+							}
+						}
+					}
+				}
+			}
+
 			public unsafe void Render(ref RenderCall callInfo, ref byte[] dummyBytes)
 			{
 				if(dummyBytes.Length < maxUniformSize)
@@ -830,7 +1009,7 @@ _fail:
 							switch(cmd.Type)
 							{
 								case GraphicsCommandType.Draw:
-									callInfo.rapi.RenderDrawable(drawableHandle, cmd.Offset, (int)cmd.Count);
+									callInfo.rapi.RenderDrawable(drawHandle, cmd.Offset, (int)cmd.Count);
 									break;
 								case GraphicsCommandType.SetUniform:
 									callInfo.shaderUniforms[uniformsMap[cmd.Index].Index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);

@@ -80,6 +80,69 @@ namespace PowerOfMind.Graphics
 		}
 
 		/// <summary>
+		/// Creates a proxy for the reference handle data. Proxy allows to use a different set of vertex attributers.
+		/// </summary>
+		public static IDrawableHandle CreateDrawableProxy(this IRenderAPI rapi, IDrawableHandle refHandle, IDrawableInfo info)
+		{
+			var refContainer = (RefContainer)refHandle;
+			var container = new RefContainer();
+			container.indicesCount = info.IndicesCount;
+
+			GL.BindVertexArray(container.vao);
+			var attribPointers = new List<int>();
+			int vBuffersCount = info.VertexBuffersCount;
+			for(int i = 0; i < vBuffersCount; i++)
+			{
+				var meta = info.GetVertexBufferMeta(i);
+				if(!meta.Declaration.IsEmpty)
+				{
+					GL.BindBuffer(BufferTarget.ArrayBuffer, refContainer.vertexBuffers[i]);
+					InitDeclaration(meta.Declaration, attribPointers);
+				}
+			}
+			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+			container.attribPointers = attribPointers.ToArray();
+
+			GL.BindVertexArray(0);
+			return container;
+		}
+
+		/// <summary>
+		/// Updates proxy vertex attributes.
+		/// </summary>
+		public static void UpdateDrawableProxy(this IRenderAPI rapi, IDrawableHandle refHandle, IDrawableHandle proxyHandle, IDrawableInfo info)
+		{
+			var refContainer = (RefContainer)refHandle;
+			var container = (RefContainer)proxyHandle;
+			container.indicesCount = info.IndicesCount;
+
+			GL.BindVertexArray(container.vao);
+
+			foreach(var loc in container.attribPointers)
+			{
+				GL.VertexAttribDivisor((uint)loc, 0);
+			}
+
+			var attribPointers = new List<int>();
+			int vBuffersCount = info.VertexBuffersCount;
+			for(int i = 0; i < vBuffersCount; i++)
+			{
+				var meta = info.GetVertexBufferMeta(i);
+				if(!meta.Declaration.IsEmpty)
+				{
+					GL.BindBuffer(BufferTarget.ArrayBuffer, refContainer.vertexBuffers[i]);
+					InitDeclaration(meta.Declaration, attribPointers);
+				}
+			}
+			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+			container.attribPointers = attribPointers.ToArray();
+
+			GL.BindVertexArray(0);
+		}
+
+		/// <summary>
 		/// Resizes the data buffers for the given handle, this may be needed if the number of vertices or indexes has changed.
 		/// </summary>
 		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, bool updateVertexDeclaration = false)
@@ -97,6 +160,7 @@ namespace PowerOfMind.Graphics
 				{
 					GL.VertexAttribDivisor((uint)loc, 0);
 				}
+
 				var attribPointers = new List<int>();
 				var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
 				for(int i = 0; i < vBuffersCount; i++)
@@ -302,6 +366,13 @@ namespace PowerOfMind.Graphics
 				vao = GL.GenVertexArray();
 			}
 
+			public RefContainer()
+			{
+				indexBuffer = 0;
+				vertexBuffers = Array.Empty<int>();
+				vao = GL.GenVertexArray();
+			}
+
 			public void Dispose()
 			{
 				if(!disposed)
@@ -311,7 +382,7 @@ namespace PowerOfMind.Graphics
 					{
 						GL.DeleteBuffer(vertexBuffers[i]);
 					}
-					GL.DeleteBuffer(indexBuffer);
+					if(indexBuffer != 0) GL.DeleteBuffer(indexBuffer);
 
 					vao = 0;
 					indexBuffer = 0;

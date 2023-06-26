@@ -7,6 +7,8 @@
 	{
 		public readonly VertexAttribute[] Attributes;
 
+		public bool IsEmpty => Attributes == null || Attributes.Length == 0;
+
 		public VertexDeclaration(VertexAttribute[] attributes)
 		{
 			Attributes = attributes;

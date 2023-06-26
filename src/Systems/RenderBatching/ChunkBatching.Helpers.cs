@@ -151,10 +151,10 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		private class ChunkDrawableData : IDrawableData
 		{
-			EnumDrawMode IDrawableData.DrawMode => EnumDrawMode.Triangles;
-			uint IDrawableData.IndicesCount => indicesCount;
-			uint IDrawableData.VerticesCount => verticesCount;
-			int IDrawableData.VertexBuffersCount => 1;
+			EnumDrawMode IDrawableInfo.DrawMode => EnumDrawMode.Triangles;
+			uint IDrawableInfo.IndicesCount => indicesCount;
+			uint IDrawableInfo.VerticesCount => verticesCount;
+			int IDrawableInfo.VertexBuffersCount => 1;
 
 			public uint indicesCount, verticesCount;
 			public int verticesStride;
@@ -165,6 +165,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			public void Clear()
 			{
+				vertexDeclaration = default;
 				verticesData = null;
 				indicesData = null;
 			}
@@ -196,12 +197,12 @@ namespace PowerOfMind.Systems.RenderBatching
 				}
 			}
 
-			IndicesMeta IDrawableData.GetIndicesMeta()
+			IndicesMeta IDrawableInfo.GetIndicesMeta()
 			{
 				return new IndicesMeta(false);
 			}
 
-			VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+			VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 			{
 				return new VertexBufferMeta(vertexDeclaration, false);
 			}

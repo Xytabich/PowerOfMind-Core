@@ -1,5 +1,6 @@
 ﻿using PowerOfMind.Collections;
 using PowerOfMind.Graphics;
+using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Generic;
@@ -23,6 +24,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			public RenderPassGroup[] renderPasses;
 			public GraphicsCommand[] commands;
 			public UniformPointer[] uniformsMap;
+			public int[] shadowUniformsMap = null;
 			public byte[] uniformsData;
 
 			public uint verticesCount;
@@ -32,13 +34,17 @@ namespace PowerOfMind.Systems.RenderBatching
 			public readonly List<byte[]> verticesBlocks = new List<byte[]>();
 			public uint[] indices;
 
+			public VertexDeclaration shadowDeclaration = default;
+
 			private readonly IExtendedShaderProgram shader;
+			private readonly IExtendedShaderProgram shadowShader;
 			private readonly ChunkBatching container;
 
-			public BuildTask(ChunkBatching container, IExtendedShaderProgram shader, int[] builders, int version, int chunkShaderId)
+			public BuildTask(ChunkBatching container, IExtendedShaderProgram shader, IExtendedShaderProgram shadowShader, int[] builders, int version, int chunkShaderId)
 			{
 				this.container = container;
 				this.shader = shader;
+				this.shadowShader = shadowShader;
 				this.builders = builders;
 				this.version = version;
 				this.chunkShaderId = chunkShaderId;
@@ -72,6 +78,69 @@ namespace PowerOfMind.Systems.RenderBatching
 					}
 
 					context.BuildCommands(out commands, out indices, out uniformsData, out uniformsMap, out renderPasses);
+
+					if(shadowShader != null)
+					{
+						foreach(var pass in renderPasses)
+						{
+							if(pass.RenderPass switch {
+								EnumChunkRenderPass.Opaque => true,
+								EnumChunkRenderPass.OpaqueNoCull => true,
+								EnumChunkRenderPass.BlendNoCull => true,
+								EnumChunkRenderPass.TopSoil => true,
+								_ => false
+							})
+							{
+								var attributes = new RefList<VertexAttribute>();
+								shadowShader.MapDeclaration(declaration, attributes);
+
+								for(int i = 0; i < attributes.Count; i++)
+								{
+									if(attributes[i].Alias == VertexAttributeAlias.POSITION)
+									{
+										shadowDeclaration = new VertexDeclaration(attributes.ToArray());
+
+										context.uniformToIndexMap.Clear();
+										for(int j = 0; j < builders.Length; j++)
+										{
+											var builderStruct = container.builders[builders[j]].builderStruct;
+											context.uniformsMap.Clear();
+											shader.MapDeclaration(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
+											context.tmpUniformsMap.Clear();
+											shadowShader.MapDeclaration(builderStruct.GetUniformsDeclaration(), context.tmpUniformsMap);
+											foreach(var pair in context.uniformsMap)
+											{
+												if(context.tmpUniformsMap.TryGetValue(pair.Key, out var index))
+												{
+													context.uniformToIndexMap[pair.Value] = index;
+												}
+											}
+										}
+
+										var drawUniforms = shader.Uniforms.Properties;
+										var shadowUniforms = shadowShader.Uniforms.Properties;
+										shadowUniformsMap = new int[uniformsMap.Length];
+										for(int j = uniformsMap.Length - 1; j >= 0; j--)
+										{
+											int index = uniformsMap[j].Index;
+											if(context.uniformToIndexMap.TryGetValue(index, out var shadowUniformIndex) &&
+												drawUniforms[index].Type == shadowUniforms[shadowUniformIndex].Type &&
+												drawUniforms[index].UniformSize == shadowUniforms[shadowUniformIndex].UniformSize)
+											{
+												shadowUniformsMap[j] = shadowUniformIndex;
+											}
+											else
+											{
+												shadowUniformsMap[j] = -1;
+											}
+										}
+										break;
+									}
+								}
+								break;
+							}
+						}
+					}
 				}
 				catch(Exception e)
 				{

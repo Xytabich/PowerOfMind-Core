@@ -388,10 +388,10 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			private class DrawableDataBuilder : IDrawableData
 			{
-				EnumDrawMode IDrawableData.DrawMode => EnumDrawMode.Triangles;
-				uint IDrawableData.IndicesCount => indicesCount;
-				uint IDrawableData.VerticesCount => verticesCount;
-				int IDrawableData.VertexBuffersCount => original.VertexBuffersCount;
+				EnumDrawMode IDrawableInfo.DrawMode => EnumDrawMode.Triangles;
+				uint IDrawableInfo.IndicesCount => indicesCount;
+				uint IDrawableInfo.VerticesCount => verticesCount;
+				int IDrawableInfo.VertexBuffersCount => original.VertexBuffersCount;
 
 				private readonly IndicesContext.ProcessorDelegate indicesProcessor;
 				private readonly VerticesContext.ProcessorDelegate verticesProcessor;
@@ -470,12 +470,12 @@ namespace PowerOfMind.Systems.RenderBatching
 					original.ProvideVertices(context);
 				}
 
-				IndicesMeta IDrawableData.GetIndicesMeta()
+				IndicesMeta IDrawableInfo.GetIndicesMeta()
 				{
 					return new IndicesMeta(false);
 				}
 
-				VertexBufferMeta IDrawableData.GetVertexBufferMeta(int index)
+				VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 				{
 					return original.GetVertexBufferMeta(index);
 				}

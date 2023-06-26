@@ -1,6 +1,7 @@
 ﻿using OpenTK.Graphics.OpenGL;
 using PowerOfMind.Graphics.Shader;
 using PowerOfMind.Systems.Graphics;
+using PowerOfMind.Systems.Graphics.Shader;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -114,6 +115,14 @@ namespace PowerOfMind.Graphics
 				return shader;
 			}
 			return null;
+		}
+
+		public IExtendedShaderProgram ExtendStandardShader(ShaderProgramBase shader,
+			IReadOnlyDictionary<string, string> attribNameToAlias = null,
+			IReadOnlyDictionary<string, string> uniformNameToAlias = null)
+		{
+			if(shader.Disposed) throw new InvalidOperationException("Shader must be initialized");
+			return new StandardShaderProxy(shader, this, attribNameToAlias, uniformNameToAlias);
 		}
 
 		internal bool TryCompileShaderStage(EnumShaderType type, string code, out int handle, out string error)

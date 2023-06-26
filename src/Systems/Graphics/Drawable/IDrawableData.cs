@@ -3,7 +3,14 @@ using Vintagestory.API.Client;
 
 namespace PowerOfMind.Graphics.Drawable
 {
-	public interface IDrawableData
+	public interface IDrawableData : IDrawableInfo
+	{
+		void ProvideIndices(IndicesContext context);
+
+		void ProvideVertices(VerticesContext context);
+	}
+
+	public interface IDrawableInfo
 	{
 		EnumDrawMode DrawMode { get; }
 
@@ -16,10 +23,6 @@ namespace PowerOfMind.Graphics.Drawable
 		IndicesMeta GetIndicesMeta();
 
 		VertexBufferMeta GetVertexBufferMeta(int index);
-
-		void ProvideIndices(IndicesContext context);
-
-		void ProvideVertices(VerticesContext context);
 	}
 
 	public readonly struct IndicesMeta
