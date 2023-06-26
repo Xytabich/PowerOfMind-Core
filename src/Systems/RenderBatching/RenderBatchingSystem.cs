@@ -16,7 +16,7 @@ namespace PowerOfMind.Systems.RenderBatching
 	{
 		public ChunkBatching ChunkBatcher { get; private set; }
 
-		private Dictionary<int3, List<Action<int3>>> chunkDirtyListeners = new Dictionary<int3, List<Action<int3>>>();
+		private readonly Dictionary<int3, List<Action<int3>>> chunkDirtyListeners = new Dictionary<int3, List<Action<int3>>>();
 		private Harmony harmony = null;
 
 		public override void StartClientSide(ICoreClientAPI api)
@@ -73,10 +73,10 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		private static void SetChunkDirtyPrefix(long index3d, ClientWorldMap __instance, ClientMain ___game)
 		{
-			var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
 			int3 coord;
 			if(Thread.CurrentThread.ManagedThreadId == RuntimeEnv.MainThreadId)
 			{
+				var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
 				if(mod.chunkDirtyListeners.Count > 0)
 				{
 					coord.x = (int)(index3d % __instance.chunkMapSizeXFast);
@@ -93,6 +93,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				coord.z = (int)(index3d / __instance.chunkMapSizeXFast % __instance.chunkMapSizeZFast);
 
 				___game.EnqueueMainThreadTask(() => {
+					var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
 					if(mod.chunkDirtyListeners.Count > 0) mod.OnChunkDirty(coord);
 				}, "powerofmind:renderbatch-chunkdirty");
 			}
@@ -100,9 +101,9 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		private static void MarkChunkDirtyPrefix(int cx, int cy, int cz, ClientMain ___game)
 		{
-			var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
 			if(Thread.CurrentThread.ManagedThreadId == RuntimeEnv.MainThreadId)
 			{
+				var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
 				if(mod.chunkDirtyListeners.Count > 0)
 				{
 					mod.OnChunkDirty(new int3(cx, cy, cz));
@@ -112,6 +113,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			{
 				var coord = new int3(cx, cy, cz);
 				___game.EnqueueMainThreadTask(() => {
+					var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
 					if(mod.chunkDirtyListeners.Count > 0) mod.OnChunkDirty(coord);
 				}, "powerofmind:renderbatch-chunkdirty");
 			}
