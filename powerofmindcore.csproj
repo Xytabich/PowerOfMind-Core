@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 	<PropertyGroup>
 		<LangVersion>latest</LangVersion>
-		<TargetFramework>netstandard2.0</TargetFramework>
+		<TargetFramework>net7</TargetFramework>
 		<OutputType>Library</OutputType>
 		<RootNamespace>PowerOfMind</RootNamespace>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
@@ -18,38 +18,43 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<Reference Include="0Harmony">
-			<HintPath>..\..\..\Games\Vintagestory18\Lib\0Harmony.dll</HintPath>
+			<HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\0Harmony.dll</HintPath>
 		</Reference>
-		<Reference Include="OpenTK">
-			<HintPath>..\..\..\Games\Vintagestory18\Lib\OpenTK.dll</HintPath>
+		<Reference Include="OpenTK.Core">
+		  <HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\OpenTK.Core.dll</HintPath>
+		  <Private>False</Private>
+		</Reference>
+		<Reference Include="OpenTK.Graphics">
+		  <HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\OpenTK.Graphics.dll</HintPath>
+		  <Private>False</Private>
 		</Reference>
 		<Reference Include="protobuf-net">
-			<HintPath>..\..\..\Games\Vintagestory18\Lib\protobuf-net.dll</HintPath>
+			<HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\protobuf-net.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.Mathematics">
 			<HintPath>.\Unity.Mathematics.dll</HintPath>
 		</Reference>
 		<Reference Include="VintagestoryAPI">
-			<HintPath>C:\Games\Vintagestory18\VintagestoryAPI.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\VintagestoryAPI.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="VintagestoryLib">
-			<HintPath>..\..\..\Games\Vintagestory18\VintagestoryLib.dll</HintPath>
+			<HintPath>..\..\..\Games\Vintagestory18.NET7\VintagestoryLib.dll</HintPath>
 		</Reference>
 		<Reference Include="VSSurvivalMod">
-			<HintPath>C:\Games\Vintagestory18\Mods\VSSurvivalMod.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\Mods\VSSurvivalMod.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="VSEssentials">
-			<HintPath>C:\Games\Vintagestory18\Mods\VSEssentials.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\Mods\VSEssentials.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="VSCreativeMod">
-			<HintPath>C:\Games\Vintagestory18\Mods\VSCreativeMod.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\Mods\VSCreativeMod.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="Newtonsoft.Json">
-			<HintPath>C:\Games\Vintagestory18\Lib\Newtonsoft.Json.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\Lib\Newtonsoft.Json.dll</HintPath>
 			<Private>False</Private>
 		</Reference>
 	</ItemGroup>
