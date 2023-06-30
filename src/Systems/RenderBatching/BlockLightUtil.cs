@@ -22,6 +22,9 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		private static readonly GetOneBlockData chunkGetOneBlockData;
 
+		private static readonly int2[] axesByFacingLookup;
+		private static readonly int4[] indexesByFacingLookup;
+
 		static BlockLightUtil()
 		{
 			var clientChunkDataType = typeof(ClientChunk).Assembly.GetType("Vintagestory.Client.NoObf.ClientChunkData");
@@ -56,7 +59,12 @@ namespace PowerOfMind.Systems.RenderBatching
 					blockOffsets[j] = new int3(offset.X, offset.Y, offset.Z);
 				}
 			}
+
+			axesByFacingLookup = new int2[6] { new int2(0, 1), new int2(1, 2), new int2(0, 1), new int2(1, 2), new int2(0, 2), new int2(0, 2) };
+			indexesByFacingLookup = new int4[6] { new int4(3, 2, 1, 0), new int4(3, 1, 2, 0), new int4(2, 3, 0, 1), new int4(2, 0, 3, 1), new int4(3, 2, 1, 0), new int4(1, 0, 3, 2) };
 		}
+
+		public BlockLightUtil.Unmanaged unmanaged;
 
 		private Block block;
 		private IBlockAccessor blockAccessor;
@@ -71,7 +79,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			currentChunkBlocksExt = new Block[27];
 		}
 
-		public void Init(ref Unmanaged unmanaged, IBlockAccessor blockAccessor, IGeometryTester geometryTester, ColorUtil.LightUtil lightConverter)
+		public void Init(IBlockAccessor blockAccessor, IGeometryTester geometryTester, ColorUtil.LightUtil lightConverter)
 		{
 			unmanaged.chunkSize = blockAccessor.ChunkSize;
 			unmanaged.chunkSizeMask = unmanaged.chunkSize - 1;
@@ -186,6 +194,33 @@ namespace PowerOfMind.Systems.RenderBatching
 				return totalLight + (outLightRGB[24] = currentChunkRgbsExt[CENTER]);
 			}
 
+			int colorTopLeft, colorTopRight, colorBottomLeft, colorBottomRight, baseIndex;
+			int2 axesByFacing;
+			int4 indexes;
+			public void SetVerticesFace(int i)
+			{
+				axesByFacing = axesByFacingLookup[i];
+				indexes = indexesByFacingLookup[i];
+				baseIndex = i * 4;
+				colorTopLeft = outLightRGB[baseIndex + indexes[0]];
+				colorTopRight = outLightRGB[baseIndex + indexes[1]];
+				colorBottomLeft = outLightRGB[baseIndex + indexes[2]];
+				colorBottomRight = outLightRGB[baseIndex + indexes[3]];
+			}
+
+			float lx, ly;
+			public int GetVertexColor(float3 vertPos)
+			{
+				lx = GameMath.Clamp(vertPos[axesByFacing[0]], 0f, 1f);
+				ly = GameMath.Clamp(vertPos[axesByFacing[1]], 0f, 1f);
+				return GameMath.BiLerpRgbaColor(lx, ly, colorTopLeft, colorTopRight, colorBottomLeft, colorBottomRight);
+			}
+
+			public int GetAverageColor()
+			{
+				return outLightRGB[24];
+			}
+
 			//locals(some shared with CornerAoRGB):
 			int rgb, absorption, rgbExt, newSunLight, hsv, oldV, v, newR, newG, newB, blockRGB, neighbourLighter, i, dirExtIndex3d;
 			bool thisIsALeaf, ao;
@@ -264,8 +299,20 @@ namespace PowerOfMind.Systems.RenderBatching
 				g = (byte)(blockRGB >> 8);
 				b = (byte)blockRGB;
 				currentLightRGBByCorner[0] = CornerAoRGB(doTop, doLeft, doTopLeft);
+				sunLight = (byte)(blockRGB >> 24);
+				r = (byte)(blockRGB >> 16);
+				g = (byte)(blockRGB >> 8);
+				b = (byte)blockRGB;
 				currentLightRGBByCorner[1] = CornerAoRGB(doTop, doRight, doTopRight);
+				sunLight = (byte)(blockRGB >> 24);
+				r = (byte)(blockRGB >> 16);
+				g = (byte)(blockRGB >> 8);
+				b = (byte)blockRGB;
 				currentLightRGBByCorner[2] = CornerAoRGB(doBottom, doLeft, doBottomLeft);
+				sunLight = (byte)(blockRGB >> 24);
+				r = (byte)(blockRGB >> 16);
+				g = (byte)(blockRGB >> 8);
+				b = (byte)blockRGB;
 				currentLightRGBByCorner[3] = CornerAoRGB(doBottom, doRight, doBottomRight);
 				return (long)currentLightRGBByCorner[0] + (long)currentLightRGBByCorner[1] + (long)currentLightRGBByCorner[2] + (long)currentLightRGBByCorner[3];
 			}
