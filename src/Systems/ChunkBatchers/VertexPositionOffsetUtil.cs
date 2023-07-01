@@ -4,7 +4,7 @@ using System;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
 
-namespace PowerOfMind.Systems.RenderBatching
+namespace PowerOfMind.Systems.ChunkBatchers
 {
 	public class VertexPositionOffsetUtil : IDrawableData
 	{

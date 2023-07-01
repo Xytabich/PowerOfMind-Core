@@ -7,7 +7,7 @@ using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client.NoObf;
 
-namespace PowerOfMind.Systems.RenderBatching
+namespace PowerOfMind.Systems.ChunkBatchers
 {
 	public class BlockLightUtil
 	{

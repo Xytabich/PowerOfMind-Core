@@ -2,6 +2,7 @@
 using PowerOfMind.Graphics;
 using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
+using PowerOfMind.Systems.RenderBatching;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -11,7 +12,7 @@ using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
 
-namespace PowerOfMind.Systems.RenderBatching
+namespace PowerOfMind.Systems.ChunkBatchers
 {
 	public class WorldBatcher<TVertex, TUniform>
 		where TVertex : unmanaged, IVertexStruct
@@ -41,13 +42,13 @@ namespace PowerOfMind.Systems.RenderBatching
 		public WorldBatcher(ICoreClientAPI capi, IExtendedShaderProgram shader, in TVertex vertexStruct, in TUniform uniformStruct)
 		{
 			mod = capi.ModLoader.GetModSystem<RenderBatchingSystem>();
-			this.batchingSystem = mod.ChunkBatcher;
+			batchingSystem = mod.ChunkBatcher;
 			this.shader = shader;
 			this.vertexStruct = vertexStruct;
 			this.uniformStruct = uniformStruct;
 
 			chunkSize = capi.World.BlockAccessor.ChunkSize;
-			bitBlockSize = (chunkSize * chunkSize * chunkSize) >> 5;
+			bitBlockSize = chunkSize * chunkSize * chunkSize >> 5;
 		}
 
 		public int AddProvider(IBlockDataProvider provider)
@@ -193,7 +194,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				foreach(var id in batcher.bitChains.GetEnumerable(bitsChain))
 				{
 					var block = batcher.bitBlocks[id];
-					block[intIndex] = (block[intIndex] & ~(1u << bitIndex)) | (((uint)providerIndex & 1) << bitIndex);
+					block[intIndex] = block[intIndex] & ~(1u << bitIndex) | ((uint)providerIndex & 1) << bitIndex;
 					providerIndex >>= 1;
 				}
 			}
@@ -207,7 +208,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				{
 					var block = batcher.bitBlocks[id];
 					providerIndex <<= 1;
-					providerIndex |= (block[intIndex] >> bitIndex) & 1;
+					providerIndex |= block[intIndex] >> bitIndex & 1;
 					block[intIndex] &= ~(1u << bitIndex);
 				}
 				if(providerIndex == 0) return false;
@@ -506,7 +507,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				private unsafe void CullIndices(byte* vertices, uint stride)
 				{
 					bool cullBackfaces = this.cullBackfaces;
-					int visibleSides = ~this.cullSides;
+					int visibleSides = ~cullSides;
 					TriangleCalcUtil util = default;
 					fixed(uint* ptr = indices)
 					{
@@ -618,9 +619,9 @@ namespace PowerOfMind.Systems.RenderBatching
 
 						//Check if P in edge region of BC, if so return projection of P onto BC
 						v = d3 * d6 - d5 * d4;
-						if(v <= 0.0f && (d4 - d3) >= 0.0f && (d5 - d6) >= 0.0f)
+						if(v <= 0.0f && d4 - d3 >= 0.0f && d5 - d6 >= 0.0f)
 						{
-							v = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+							v = (d4 - d3) / (d4 - d3 + (d5 - d6));
 							p = (1 - v) * b + v * c; //Barycentric coordinates (0,1-w,w)
 							return false;
 						}
@@ -667,7 +668,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			public static bool PointInView(float3 v, int sidesMask)
 			{
-				if((v.x > EPSILON_MIN) & (v.x < EPSILON_MAX) & (v.y > EPSILON_MIN) & (v.y < EPSILON_MAX) & (v.z > EPSILON_MIN) & (v.z < EPSILON_MAX)) return true;
+				if(v.x > EPSILON_MIN & v.x < EPSILON_MAX & v.y > EPSILON_MIN & v.y < EPSILON_MAX & v.z > EPSILON_MIN & v.z < EPSILON_MAX) return true;
 				v = math.normalizesafe(v - cubeCenter);
 				fixed(float* sideNormals = CubeBoundsHelper.sideNormals.values)
 				{
@@ -711,7 +712,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			public ChunkProviderInfo(int providerId)
 			{
 				this.providerId = providerId;
-				this.usageCounter = 0;
+				usageCounter = 0;
 			}
 		}
 	}
@@ -738,7 +739,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			while(i >= 0)
 			{
 				value <<= 1;
-				value |= (bitBlocks[i] >> bitOffset) & 1;
+				value |= bitBlocks[i] >> bitOffset & 1;
 				i--;
 			}
 			return value;

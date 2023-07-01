@@ -1,6 +1,5 @@
 ﻿using PowerOfMind.Collections;
 using PowerOfMind.Graphics;
-using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
 using System;
 using System.Collections.Generic;

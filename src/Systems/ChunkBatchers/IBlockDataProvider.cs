@@ -1,6 +1,7 @@
-﻿using Unity.Mathematics;
+﻿using PowerOfMind.Systems.RenderBatching;
+using Unity.Mathematics;
 
-namespace PowerOfMind.Systems.RenderBatching
+namespace PowerOfMind.Systems.ChunkBatchers
 {
 	public interface IBlockDataProvider
 	{
