@@ -9,13 +9,28 @@ namespace PowerOfMind.Systems.RenderBatching
 			where TVertex : unmanaged, IVertexStruct
 			where TUniform : unmanaged, IUniformsData
 		{
-			private readonly TVertex vertexDefaults;
-			private readonly TUniform uniformDefaults;
+			private TVertex vertexDefaults;
+			private TUniform uniformDefaults;
+			private readonly IBatchDataBuilder<TVertex, TUniform> builder;
 
-			public BuilderStructContainer(in TVertex vertexDefaults, in TUniform uniformDefaults)
+			public BuilderStructContainer(IBatchDataBuilder<TVertex, TUniform> builder)
 			{
-				this.vertexDefaults = vertexDefaults;
-				this.uniformDefaults = uniformDefaults;
+				this.builder = builder;
+			}
+
+			public override string ToString()
+			{
+				return builder.ToString();
+			}
+
+			void IBuilderStructContainer.Init()
+			{
+				builder.GetDefaultData(out vertexDefaults, out uniformDefaults);
+			}
+
+			void IBuilderStructContainer.Build(IBatchBuildContext context)
+			{
+				builder.Build(context);
 			}
 
 			VertexDeclaration IBuilderStructContainer.GetVertexDeclaration()
@@ -97,6 +112,10 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		private interface IBuilderStructContainer
 		{
+			void Init();
+
+			void Build(IBatchBuildContext context);
+
 			VertexDeclaration GetVertexDeclaration();
 
 			int GetVertexStride();

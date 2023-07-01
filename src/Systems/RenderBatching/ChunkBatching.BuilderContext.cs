@@ -107,7 +107,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						}
 						if(vertStride == 0)
 						{
-							throw new Exception(string.Format("Builder {0} has no vertex attributes associated with the shader", task.container.builders[builders[i]].builder));
+							throw new Exception(string.Format("Builder {0} has no vertex attributes associated with the shader", task.container.builders[builders[i]].builderStruct.ToString()));
 						}
 
 						builderVertexMaps[i] = tmpMap.ToArray();

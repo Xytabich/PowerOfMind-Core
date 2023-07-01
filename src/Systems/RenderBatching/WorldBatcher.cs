@@ -66,7 +66,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			if(!chunkToId.TryGetValue(offset, out var id))
 			{
 				var builder = new ChunkBuilder(this, offset * chunkSize, AddBitBlock(-1), 1);
-				builder.batchingId = batchingSystem.AddBuilder(offset, shader, builder, vertexStruct, uniformStruct);
+				builder.batchingId = batchingSystem.AddBuilder(offset, shader, builder);
 				id = chunks.Add(builder);
 				chunkToId[offset] = id;
 
@@ -126,7 +126,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			return pos.x + (pos.y + pos.z * chunkSize) * chunkSize;
 		}
 
-		private class ChunkBuilder : IBatchDataBuilder
+		private class ChunkBuilder : IBatchDataBuilder<TVertex, TUniform>
 		{
 			private const int CULL_ALL = 63;
 
@@ -241,7 +241,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				}
 			}
 
-			void IBatchDataBuilder.Build(IBatchBuildContext context)
+			void IBatchDataBuilder<TVertex, TUniform>.Build(IBatchBuildContext context)
 			{
 				if(isDisposed) return;
 				var providers = this.providers;
@@ -301,6 +301,12 @@ namespace PowerOfMind.Systems.RenderBatching
 					}
 				}
 				batchBuildContext?.Clear();
+			}
+
+			void IBatchDataBuilder<TVertex, TUniform>.GetDefaultData(out TVertex vertexDefault, out TUniform uniformsDefault)
+			{
+				vertexDefault = batcher.vertexStruct;
+				uniformsDefault = batcher.uniformStruct;
 			}
 		}
 

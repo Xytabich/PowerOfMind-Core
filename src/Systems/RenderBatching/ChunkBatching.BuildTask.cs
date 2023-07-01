@@ -54,6 +54,11 @@ namespace PowerOfMind.Systems.RenderBatching
 			{
 				try
 				{
+					for(int i = 0; i < builders.Length; i++)
+					{
+						container.builders[builders[i]].builderStruct.Init();
+					}
+
 					var context = new BuilderContext(this);
 					context.Init();
 
@@ -62,7 +67,6 @@ namespace PowerOfMind.Systems.RenderBatching
 						context.SetBuilder(i);
 
 						var builderStruct = container.builders[builders[i]].builderStruct;
-						var builder = container.builders[builders[i]].builder;
 
 						context.uniformsMap.Clear();
 						shader.MapDeclarationInv(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
@@ -74,7 +78,7 @@ namespace PowerOfMind.Systems.RenderBatching
 							}
 						}
 
-						builder.Build(context);
+						builderStruct.Build(context);
 					}
 
 					context.BuildCommands(out commands, out indices, out uniformsData, out uniformsMap, out renderPasses);
