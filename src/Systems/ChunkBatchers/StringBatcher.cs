@@ -22,6 +22,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 		private readonly IBlockAccessor blockAccessor;
 		private readonly IClientWorldAccessor worldAccessor;
 
+		private readonly RenderBatchingSystem mod;
 		private readonly ChunkBatching batchingSystem;
 		private readonly TVertex vertexStruct;
 		private readonly TUniform uniformStruct;
@@ -35,7 +36,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 		public StringBatcher(ICoreClientAPI capi, IExtendedShaderProgram shader, in TVertex vertexStruct, in TUniform uniformStruct)
 		{
-			var mod = capi.ModLoader.GetModSystem<RenderBatchingSystem>();
+			mod = capi.ModLoader.GetModSystem<RenderBatchingSystem>();
 			blockAccessor = capi.World.GetLockFreeBlockAccessor();
 			worldAccessor = capi.World;
 			batchingSystem = mod.ChunkBatcher;
@@ -76,8 +77,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 			float3 AddChunk(int3 fromBlock, float3 fromOffset, int3 toBlock, float3 toOffset, int3 prevBlock, ref int stringChunksChain, int chunkSize, int sid, int3 chunk)
 			{
-				var rayOrigin = (fromBlock - chunk * chunkSize) + fromOffset;
-				var point = FindRayBoxIntersection(rayOrigin, ((toBlock - chunk * chunkSize) + toOffset) - rayOrigin, chunkSize);
+				var fromPos = (fromBlock - chunk * chunkSize) + fromOffset;
+				var toPos = (toBlock - chunk * chunkSize) + toOffset;
 
 				int cid;
 				ChunkBatchGroup chunkBatch;
@@ -92,13 +93,15 @@ namespace PowerOfMind.Systems.ChunkBatchers
 					chunkBatch.builderId = batchingSystem.AddBuilder(chunk, shader, chunkBatch);
 					chunkId = chunks.Add(chunkBatch);
 					chunkToId[chunk] = chunkId;
+
+					mod.RegisterChunkDirtyListener(chunk, UpdateChunk);
 				}
 
-				cid = chunkStrings.Add(chunkBatch.stringChain, new ChunkStringSegment(chunkId, sid, rayOrigin, point, fromBlock, prevBlock));
+				cid = chunkStrings.Add(chunkBatch.stringChain, new ChunkStringSegment(chunkId, sid, fromPos, toPos, fromBlock, prevBlock));
 				if(chunkBatch.stringChain < 0) chunkBatch.stringChain = cid;
 
 				stringChunksChain = stringChunks.Append(stringChunksChain, cid);
-				return point;
+				return toPos;
 			}
 		}
 
@@ -111,6 +114,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				if(chunks[chunkId].stringChain < 0)
 				{
 					batchingSystem.RemoveBuilder(chunks[chunkId].builderId);
+					mod.UnregisterChunkDirtyListener(chunks[chunkId].index, UpdateChunk);
+
 					chunkToId.Remove(chunks[chunkId].index);
 					chunks.Remove(chunkId);
 				}
@@ -120,6 +125,14 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				}
 			}
 			strings.Remove(id);
+		}
+
+		private void UpdateChunk(int3 index)
+		{
+			if(chunkToId.TryGetValue(index, out var id))
+			{
+				batchingSystem.MarkBuilderDirty(chunks[id].builderId);
+			}
 		}
 
 		private static float3 FindRayBoxIntersection(float3 origin, float3 direction, float boxSize)
@@ -225,8 +238,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 					var rayDir = record.toOffset - rayOrigin;
 					EnumerateLine(record.fromBlock.x, record.fromBlock.y, record.fromBlock.z, record.toBlock.x, record.toBlock.y, record.toBlock.z, (x, y, z) => {
 						var localOffset = new int3(x, y, z) - index * chunkSize;
-						var p0 = FindRayBoxIntersection(rayOrigin - localOffset, rayDir, 1f);
-						var p1 = FindRayBoxIntersection(rayOrigin + rayDir - localOffset, -rayDir, 1f);
+						var p0 = FindRayBoxIntersection(rayOrigin - localOffset - 0.5f, rayDir, 0.5f) + 0.5f;
+						var p1 = FindRayBoxIntersection(rayOrigin + rayDir - localOffset - 0.5f, -rayDir, 0.5f) + 0.5f;
 						ref var unmanaged = ref blockLightUtil.unmanaged;
 						unmanaged.SetUpLightRGBs(blockLightUtil, new int3(x, y, z));
 						builder.Build(new int3(x, y, z), localOffset, p0, p1, ref unmanaged, context);
