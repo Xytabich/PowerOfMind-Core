@@ -50,13 +50,14 @@ namespace PowerOfMind.Systems.RenderBatching
 			).Compile();
 
 			blockOffsets = new int3[27];
-			for(int i = 0; i < 6; i++)
+			for(int x = -1; x <= 1; x++)
 			{
-				var faceOffsets = CubeFaceVertices.blockFaceVerticesCentered[i];
-				for(int j = 0; j < 9; j++)
+				for(int y = -1; y <= 1; y++)
 				{
-					var offset = faceOffsets[j];
-					blockOffsets[j] = new int3(offset.X, offset.Y, offset.Z);
+					for(int z = -1; z <= 1; z++)
+					{
+						blockOffsets[MapUtil.Index3d(x, y, z, 3, 3) + CENTER] = new int3(x, y, z);
+					}
 				}
 			}
 
@@ -64,7 +65,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			indexesByFacingLookup = new int4[6] { new int4(3, 2, 1, 0), new int4(3, 1, 2, 0), new int4(2, 3, 0, 1), new int4(2, 0, 3, 1), new int4(3, 2, 1, 0), new int4(1, 0, 3, 2) };
 		}
 
-		public BlockLightUtil.Unmanaged unmanaged;
+		public Unmanaged unmanaged;
 
 		private Block block;
 		private IBlockAccessor blockAccessor;
@@ -98,8 +99,6 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		public unsafe struct Unmanaged
 		{
-			public fixed int outLightRGB[25];
-
 #if DEBUG
 			public int[] OutLightRGB
 			{
@@ -143,6 +142,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			internal int chunkSize, chunkSizeMask;
 
+			private fixed int outLightRGB[25];
 			private fixed int currentChunkRgbsExt[27];
 			private fixed int neighbourLightRGBS[9];
 			private int4 currentLightRGBByCorner;
@@ -266,7 +266,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				{
 					neighbourLighter <<= 1;
 					var neibOffset = vNeighbors[i];
-					dirExtIndex3d = CENTER + MapUtil.Index3d(neibOffset.X, neibOffset.Y, neibOffset.Z, 3, 3);
+					dirExtIndex3d = MapUtil.Index3d(neibOffset.X, neibOffset.Y, neibOffset.Z, 3, 3) + CENTER;
 					var nblock = managed.currentChunkFluidBlocksExt[dirExtIndex3d];
 					if(nblock.LightAbsorption > 0)
 					{
