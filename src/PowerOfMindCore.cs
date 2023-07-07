@@ -1,5 +1,4 @@
-﻿using HarmonyLib;
-using Vintagestory.API.Common;
+﻿using Vintagestory.API.Common;
 
 namespace PowerOfMind
 {
@@ -7,18 +6,13 @@ namespace PowerOfMind
 	{
 		public const string MODID = "powerofmindcore";
 
-		private Harmony harmony;
-
 		public override void Start(ICoreAPI api)
 		{
 			base.Start(api);
-			harmony = new Harmony(MODID);
-			harmony.PatchAll(typeof(PowerOfMindCore).Assembly);
 		}
 
 		public override void Dispose()
 		{
-			harmony.UnpatchAll(MODID);
 			base.Dispose();
 		}
 	}

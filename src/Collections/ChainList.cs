@@ -72,6 +72,11 @@ namespace PowerOfMind.Collections
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGetNextId(int chain, int id, out int nextId)
 		{
+			if(id < 0)
+			{
+				nextId = chain;
+				return chain >= 0;
+			}
 			nextId = nodes[id].next;
 			return nextId != chain;
 		}
@@ -686,6 +691,35 @@ namespace PowerOfMind.Collections
 		public interface IChainEnumerator
 		{
 			void Init(int chainId, ChainList chainList);
+		}
+	}
+
+	public static class ChainListExtensions
+	{
+		/// <summary>
+		/// Create node with value and add to chain.
+		/// Assigns a <paramref name="chain"/> if not initialized.
+		/// </summary>
+		/// <returns>Node id</returns>
+		public static int Add<T>(this ChainList<T> chainList, ref int chain, in T value)
+		{
+			int id = chainList.Add(chain, value);
+			if(chain < 0) chain = id;
+			return id;
+		}
+
+		/// <summary>
+		/// Append value to chain.
+		/// Assigns a <paramref name="chain"/> if not initialized.
+		/// </summary>
+		public static void Append<T>(this ChainList<T> chainList, ref int chain, in T value)
+		{
+			chain = chainList.Append(chain, value);
+		}
+
+		public static void Remove<T>(this ChainList<T> chainList, ref int chain, int id)
+		{
+			chain = chainList.Remove(chain, id);
 		}
 	}
 }
