@@ -1,13 +1,14 @@
-﻿using PowerOfMind.Systems.RenderBatching;
+﻿using PowerOfMind.Graphics;
+using PowerOfMind.Systems.RenderBatching;
 using System;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 
-namespace PowerOfMind.Systems.ChunkBatchers.StringBatch
+namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 {
-	public abstract class WireBuilder<TVertex> : IStringBuilder where TVertex : unmanaged
+	public abstract class WireBuilder<TVertex> : IBlockGroupBuilder where TVertex : unmanaged
 	{
 		private static readonly float faceUv = (float)Math.Sqrt(0.5);
 		private static readonly float3[] segmentPoses = new float3[] {
@@ -28,7 +29,7 @@ namespace PowerOfMind.Systems.ChunkBatchers.StringBatch
 		protected abstract float SegmentLength { get; }
 
 		protected readonly ICoreClientAPI api;
-		protected readonly int3 fromBlock, toBlock;
+		protected internal readonly int3 fromBlock, toBlock;
 		protected readonly float3 fromOffset, toOffset;
 
 		public WireBuilder(ICoreClientAPI api, int3 fromBlock, int3 toBlock, float3 fromOffset, float3 toOffset)
@@ -43,13 +44,13 @@ namespace PowerOfMind.Systems.ChunkBatchers.StringBatch
 		protected abstract void InitVertex(ref TVertex vertex, float3 position, float2 uv, int color);
 		protected abstract void AddMesh(TVertex[] vertices, int[] indices, IBatchBuildContext batcher);
 
-		unsafe void IStringBuilder.BuildChunk(int3 chunkIndex, IBlockAccessor blockAccessor, BlockLightUtil lightUtil, IBatchBuildContext batcher)
+		unsafe void IBlockGroupBuilder.BuildChunk(int3 chunkIndex, IBlockAccessor blockAccessor, BlockLightUtil lightUtil, IBatchBuildContext batcher)
 		{
 			var chunkSize = api.World.BlockAccessor.ChunkSize;
 			var chunkOrigin = chunkIndex * chunkSize;
 			var rayPos = fromBlock - chunkOrigin + fromOffset;
 			var rayDir = (toBlock - chunkOrigin + toOffset) - rayPos;
-			StringBatchUtil.RayCubeIntersection(rayPos, rayDir, chunkSize, out float tMin, out float tMax);
+			BatchUtil.RayCubeIntersection(rayPos, rayDir, chunkSize, out float tMin, out float tMax);
 			tMin = Math.Max(0, tMin);
 			tMax = Math.Min(1, tMax);
 
@@ -115,6 +116,18 @@ namespace PowerOfMind.Systems.ChunkBatchers.StringBatch
 		{
 			float t = len / fullLen;
 			return -GameMath.Lerp(GameMath.Lerp(0, 1, t), GameMath.Lerp(1, 0, t), t) * maxOffset;
+		}
+	}
+
+	public static class WireBuilderExtension
+	{
+		public static void AddWireBuilder<BVertex, BUniform, TVertex>(this BlockGroupBatcher<BVertex, BUniform> batcher, WireBuilder<TVertex> builder)
+			where BVertex : unmanaged, IVertexStruct
+			where BUniform : unmanaged, IUniformsData
+			where TVertex : unmanaged
+		{
+			var enumerator = new BatchUtil.LineEnumerator(builder.fromBlock, builder.toBlock);
+			batcher.AddGroup(ref enumerator, builder);
 		}
 	}
 }
