@@ -23,7 +23,7 @@ namespace PowerOfMind.Systems.RenderBatching
 		private readonly HeapCollection<ChunkInfo> chunks = new HeapCollection<ChunkInfo>();
 		private readonly ChainList<ChunkShaderUsage> chunkShaders = new ChainList<ChunkShaderUsage>();
 
-		private readonly Dictionary<IExtendedShaderProgram, int> shaderToId = new Dictionary<IExtendedShaderProgram, int>();
+		private readonly Dictionary<string, int> shaderToId = new Dictionary<string, int>();
 		private readonly HeapCollection<ShaderInfo> shaders = new HeapCollection<ShaderInfo>();
 		private readonly ChainList<ShaderChunkUsage> shaderChunks = new ChainList<ShaderChunkUsage>();
 
@@ -84,7 +84,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				cid = chunks.Add(new ChunkInfo(chunk, chunk * capi.World.BlockAccessor.ChunkSize));
 				chunkToId[chunk] = cid;
 			}
-			if(!shaderToId.TryGetValue(shader, out int sid))
+			if(!shaderToId.TryGetValue(shader.PassName, out int sid))
 			{
 				sid = AddShader(shader);
 			}
@@ -200,7 +200,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						rebuildStructs.Add(chunk.chunkShaderId);
 					}
 				}
-				UpdateShader(pair.Key, pair.Value);
+				UpdateShader(shader.shader, pair.Value);
 			}
 			shadowShader = null;
 			return true;
@@ -212,7 +212,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			shaders[id].shaderChunksChain = -1;
 
 			UpdateShader(shader, id);
-			shaderToId[shader] = id;
+			shaderToId[shader.PassName] = id;
 			return id;
 		}
 
@@ -605,7 +605,7 @@ _fail:
 					shaders[shaderId].shaderChunksChain = shaderChunks.Remove(shaders[shaderId].shaderChunksChain, shaderChunkId);
 					if(shaders[shaderId].shaderChunksChain < 0)
 					{
-						shaderToId.Remove(shaders[shaderId].shader);
+						shaderToId.Remove(shaders[shaderId].shader.PassName);
 						shaders.Remove(shaderId);
 					}
 					return EnumReduceUsageResult.RemovedChunkShader;
