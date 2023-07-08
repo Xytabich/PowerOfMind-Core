@@ -1,5 +1,4 @@
-﻿using PowerOfMind.Graphics;
-using PowerOfMind.Systems.RenderBatching;
+﻿using PowerOfMind.Systems.RenderBatching;
 using System;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
@@ -27,6 +26,7 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 		};
 
 		protected abstract float SegmentLength { get; }
+		protected abstract float SegmentWidth { get; }
 
 		protected readonly ICoreClientAPI api;
 		protected internal readonly int3 fromBlock, toBlock;
@@ -63,6 +63,7 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 			rayDir /= rayLen;
 			float maxYOffset = (1f - Math.Abs(math.dot(rayDir, new float3(0, 1, 0)))) * Math.Min(rayLen * 0.05f, 0.5f);
 
+			float segmentWidth = SegmentWidth;
 			float segmentLength = SegmentLength;
 			int segmentsPerUnit = (int)(1f / segmentLength);
 			int segmentCount = (int)Math.Ceiling(lenLeft / segmentLength);
@@ -81,11 +82,13 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 				for(int i = 0; i < 10; i++)
 				{
 					var tmpCoords = segmentPoses[i];
+					tmpCoords.xy *= segmentWidth;
 					tmpCoords.z *= partLen;
 					float yOffset = CalcYOffset(overallLen + tmpCoords.z, rayLen, maxYOffset);
 					tmpCoords = rayPos + math.rotate(rotation, tmpCoords);
 					tmpCoords.y += yOffset;
 					var uv = segmentUvs[i];
+					uv.y *= segmentWidth;
 					uv.x *= partLen;
 					uv.x += unitSegmentsCounter * segmentLength;
 					InitVertex(ref vertices[vertIndex], tmpCoords, uv, color);
@@ -121,13 +124,11 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 
 	public static class WireBuilderExtension
 	{
-		public static void AddWireBuilder<BVertex, BUniform, TVertex>(this BlockGroupBatcher<BVertex, BUniform> batcher, WireBuilder<TVertex> builder)
-			where BVertex : unmanaged, IVertexStruct
-			where BUniform : unmanaged, IUniformsData
+		public static int AddWireBuilder<TVertex>(this BlockGroupBatcher batcher, WireBuilder<TVertex> builder)
 			where TVertex : unmanaged
 		{
 			var enumerator = new BatchUtil.LineEnumerator(builder.fromBlock, builder.toBlock);
-			batcher.AddGroup(ref enumerator, builder);
+			return batcher.AddGroup(ref enumerator, builder);
 		}
 	}
 }

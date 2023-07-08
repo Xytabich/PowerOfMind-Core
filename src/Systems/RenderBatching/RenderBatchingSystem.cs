@@ -16,7 +16,8 @@ namespace PowerOfMind.Systems.RenderBatching
 	{
 		public ChunkBatching ChunkBatcher { get; private set; }
 
-		private readonly Dictionary<int3, List<Action<int3>>> chunkDirtyListeners = new Dictionary<int3, List<Action<int3>>>();
+		private Dictionary<BatcherKey, object> batchers = null;
+		private Dictionary<int3, List<Action<int3>>> chunkDirtyListeners = null;
 		private Harmony harmony = null;
 
 		public override void StartClientSide(ICoreClientAPI api)
@@ -32,6 +33,11 @@ namespace PowerOfMind.Systems.RenderBatching
 				new HarmonyMethod(typeof(RenderBatchingSystem).GetMethod(nameof(MarkChunkDirtyPrefix), BindingFlags.NonPublic | BindingFlags.Static)));
 		}
 
+		public override bool ShouldLoad(EnumAppSide forSide)
+		{
+			return forSide == EnumAppSide.Client;
+		}
+
 		public override void Dispose()
 		{
 			base.Dispose();
@@ -41,6 +47,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		public void RegisterChunkDirtyListener(int3 coord, Action<int3> callback)
 		{
+			if(chunkDirtyListeners == null) chunkDirtyListeners = new Dictionary<int3, List<Action<int3>>>();
 			if(!chunkDirtyListeners.TryGetValue(coord, out var callbacks))
 			{
 				callbacks = new List<Action<int3>>();
@@ -51,6 +58,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 		public void UnregisterChunkDirtyListener(int3 coord, Action<int3> callback)
 		{
+			if(chunkDirtyListeners == null) return;
 			if(chunkDirtyListeners.TryGetValue(coord, out var callbacks))
 			{
 				if(callbacks.Remove(callback))
@@ -58,6 +66,30 @@ namespace PowerOfMind.Systems.RenderBatching
 					if(callbacks.Count == 0) chunkDirtyListeners.Remove(coord);
 				}
 			}
+		}
+
+		/// <summary>
+		/// Returns a batcher for the given parameters.
+		/// Batchers must have a full set of vertex and uniform parameters for compatibility.
+		/// </summary>
+		/// <typeparam name="T"></typeparam>
+		/// <param name="shaderPass">Shader pass name</param>
+		/// <param name="ctor">Create batcher if it doesn't exist</param>
+		/// <returns>Batcher instance</returns>
+		public T GetBatcher<T>(string shaderPass, System.Func<T> ctor = null) where T : class
+		{
+			if(batchers == null && ctor == null) return null;
+			var key = new BatcherKey(shaderPass, typeof(T));
+			if(batchers == null) batchers = new Dictionary<BatcherKey, object>();
+			else if(batchers.TryGetValue(key, out var instance))
+			{
+				return instance as T;
+			}
+			if(ctor == null) return null;
+
+			var inst = ctor();
+			batchers[key] = inst;
+			return inst;
 		}
 
 		private void OnChunkDirty(int3 coord)
@@ -77,6 +109,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			if(Thread.CurrentThread.ManagedThreadId == RuntimeEnv.MainThreadId)
 			{
 				var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
+				if(mod.chunkDirtyListeners == null) return;
 				if(mod.chunkDirtyListeners.Count > 0)
 				{
 					coord.x = (int)(index3d % __instance.chunkMapSizeXFast);
@@ -94,6 +127,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				___game.EnqueueMainThreadTask(() => {
 					var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
+					if(mod.chunkDirtyListeners == null) return;
 					if(mod.chunkDirtyListeners.Count > 0) mod.OnChunkDirty(coord);
 				}, "powerofmind:renderbatch-chunkdirty");
 			}
@@ -104,6 +138,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			if(Thread.CurrentThread.ManagedThreadId == RuntimeEnv.MainThreadId)
 			{
 				var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
+				if(mod.chunkDirtyListeners == null) return;
 				if(mod.chunkDirtyListeners.Count > 0)
 				{
 					mod.OnChunkDirty(new int3(cx, cy, cz));
@@ -114,8 +149,36 @@ namespace PowerOfMind.Systems.RenderBatching
 				var coord = new int3(cx, cy, cz);
 				___game.EnqueueMainThreadTask(() => {
 					var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
+					if(mod.chunkDirtyListeners == null) return;
 					if(mod.chunkDirtyListeners.Count > 0) mod.OnChunkDirty(coord);
 				}, "powerofmind:renderbatch-chunkdirty");
+			}
+		}
+
+		private readonly struct BatcherKey : IEquatable<BatcherKey>
+		{
+			public readonly string shaderName;
+			public readonly Type type;
+
+			public BatcherKey(string shaderName, Type type)
+			{
+				this.shaderName = shaderName;
+				this.type = type;
+			}
+
+			public override bool Equals(object obj)
+			{
+				return obj is BatcherKey key && Equals(key);
+			}
+
+			public bool Equals(BatcherKey other)
+			{
+				return shaderName == other.shaderName && type == other.type;
+			}
+
+			public override int GetHashCode()
+			{
+				return HashCode.Combine(shaderName, type);
 			}
 		}
 	}

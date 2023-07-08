@@ -1,5 +1,6 @@
 ﻿using PowerOfMind.Graphics;
 using PowerOfMind.Graphics.Shader;
+using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
@@ -9,32 +10,52 @@ namespace PowerOfMind.Systems.Graphics.Shader
 {
 	public class StandardShaderProxy : IExtendedShaderProgram
 	{
-		public int PassId => shader.PassId;
+		public int PassId => ShaderRegistry.getProgram(shaderType).PassId;
 
-		public string PassName => shader.PassName;
+		public string PassName => ShaderRegistry.getProgram(shaderType).PassName;
 
-		public bool ClampTexturesToEdge { get => shader.ClampTexturesToEdge; set => shader.ClampTexturesToEdge = value; }
-		public IShader VertexShader { get => shader.VertexShader; set => shader.VertexShader = value; }
-		public IShader FragmentShader { get => shader.FragmentShader; set => shader.FragmentShader = value; }
-		public IShader GeometryShader { get => shader.GeometryShader; set => shader.GeometryShader = value; }
+		public bool ClampTexturesToEdge { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public IShader VertexShader { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public IShader FragmentShader { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+		public IShader GeometryShader { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
-		public bool Disposed => shader.Disposed;
+		public bool Disposed => ShaderRegistry.getProgram(shaderType).Disposed;
 
-		public bool LoadError => shader.LoadError;
+		public bool LoadError => ShaderRegistry.getProgram(shaderType).LoadError;
 
-		public ShaderInputDeclaration Inputs { get; }
-		public ShaderUniformDeclaration Uniforms { get; }
+		public ShaderInputDeclaration Inputs { get; private set; }
+		public ShaderUniformDeclaration Uniforms { get; private set; }
 
 		protected Dictionary<string, int> uniformNameToIndex = new Dictionary<string, int>();
 		protected Dictionary<string, int> uniformAliasToIndex = null;
 
-		private readonly IShaderProgram shader;
+		private readonly EnumShaderProgram shaderType;
+		private readonly GraphicsSystem graphics;
+		private readonly IReadOnlyDictionary<string, string> attribNameToAlias;
+		private readonly IReadOnlyDictionary<string, string> uniformNameToAlias;
 
-		public StandardShaderProxy(ShaderProgramBase shader, GraphicsSystem graphics,
+		public StandardShaderProxy(EnumShaderProgram shaderType, GraphicsSystem graphics,
 			IReadOnlyDictionary<string, string> attribNameToAlias = null, IReadOnlyDictionary<string, string> uniformNameToAlias = null)
 		{
-			this.shader = shader;
+			this.shaderType = shaderType;
+			this.graphics = graphics;
+			this.attribNameToAlias = attribNameToAlias;
+			this.uniformNameToAlias = uniformNameToAlias;
+		}
 
+		public void BindTexture2D(string samplerName, int textureId, int textureNumber)
+		{
+			ShaderRegistry.getProgram(shaderType).BindTexture2D(samplerName, textureId, textureNumber);
+		}
+
+		public void BindTextureCube(string samplerName, int textureId, int textureNumber)
+		{
+			ShaderRegistry.getProgram(shaderType).BindTextureCube(samplerName, textureId, textureNumber);
+		}
+
+		public bool Compile()
+		{
+			var shader = ShaderRegistry.getProgram(shaderType);
 			Inputs = new ShaderInputDeclaration(graphics.GetShaderAttributes(shader.ProgramId, attribNameToAlias));
 
 			var uniforms = graphics.GetShaderUniforms(shader.ProgramId, uniformNameToAlias, false);
@@ -52,86 +73,71 @@ namespace PowerOfMind.Systems.Graphics.Shader
 				}
 			}
 			Uniforms = new ShaderUniformDeclaration(uniforms);
-		}
-
-		public void BindTexture2D(string samplerName, int textureId, int textureNumber)
-		{
-			shader.BindTexture2D(samplerName, textureId, textureNumber);
-		}
-
-		public void BindTextureCube(string samplerName, int textureId, int textureNumber)
-		{
-			shader.BindTextureCube(samplerName, textureId, textureNumber);
-		}
-
-		public bool Compile()
-		{
-			return shader.Compile();
+			return true;
 		}
 
 		public void Dispose()
 		{
-			shader.Dispose();
 		}
 
 		public void Stop()
 		{
-			shader.Stop();
+			ShaderRegistry.getProgram(shaderType).Stop();
 		}
 
 		public void Uniform(string uniformName, float value)
 		{
-			shader.Uniform(uniformName, value);
+			ShaderRegistry.getProgram(shaderType).Uniform(uniformName, value);
 		}
 
 		public void Uniform(string uniformName, int value)
 		{
-			shader.Uniform(uniformName, value);
+			ShaderRegistry.getProgram(shaderType).Uniform(uniformName, value);
 		}
 
 		public void Uniform(string uniformName, Vec2f value)
 		{
-			shader.Uniform(uniformName, value);
+			ShaderRegistry.getProgram(shaderType).Uniform(uniformName, value);
 		}
 
 		public void Uniform(string uniformName, Vec3f value)
 		{
-			shader.Uniform(uniformName, value);
+			ShaderRegistry.getProgram(shaderType).Uniform(uniformName, value);
 		}
 
 		public void Uniform(string uniformName, Vec4f value)
 		{
-			shader.Uniform(uniformName, value);
+			ShaderRegistry.getProgram(shaderType).Uniform(uniformName, value);
 		}
 
 		public void UniformMatrices(string uniformName, int count, float[] matrix)
 		{
-			shader.UniformMatrices(uniformName, count, matrix);
+			ShaderRegistry.getProgram(shaderType).UniformMatrices(uniformName, count, matrix);
 		}
 
 		public void UniformMatrices4x3(string uniformName, int count, float[] matrix)
 		{
-			shader.UniformMatrices4x3(uniformName, count, matrix);
+			ShaderRegistry.getProgram(shaderType).UniformMatrices4x3(uniformName, count, matrix);
 		}
 
 		public void UniformMatrix(string uniformName, float[] matrix)
 		{
-			shader.UniformMatrix(uniformName, matrix);
+			((IShaderProgram)ShaderRegistry.getProgram(shaderType)).UniformMatrix(uniformName, matrix);
 		}
 
 		public void Uniforms4(string uniformName, int count, float[] values)
 		{
-			shader.Uniforms4(uniformName, count, values);
+			ShaderRegistry.getProgram(shaderType).Uniforms4(uniformName, count, values);
 		}
 
 		public void Use()
 		{
-			shader.Use();
+			ShaderRegistry.getProgram(shaderType).Use();
 		}
 
 		public void SetSampler(int textureNumber, ITextureSampler sampler)
 		{
-			throw new System.NotImplementedException();
+			throw new NotImplementedException();
 		}
 
 		public void BindTexture(int uniformIndex, EnumTextureTarget target, int textureId, int textureNumber)

@@ -25,5 +25,9 @@
 		public const string EXTRA_GLOW = "EXTRA_GLOW";
 
 		public const string MAIN_TEXTURE = "MAIN_TEXTURE";
+		public const string TEXTURE_0 = "MAIN_TEXTURE";
+		public const string TEXTURE_1 = "TEXTURE_1";
+
+		public const string TEXTURE_SIZE = "TEXTURE_SIZE";
 	}
 }

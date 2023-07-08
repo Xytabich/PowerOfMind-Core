@@ -14,7 +14,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 	/// <summary>
 	/// Batcher for groups of blocks to be split into chunks
 	/// </summary>
-	public class BlockGroupBatcher<TVertex, TUniform>
+	public class BlockGroupBatcher<TVertex, TUniform> : BlockGroupBatcher
 		where TVertex : unmanaged, IVertexStruct
 		where TUniform : unmanaged, IUniformsData
 	{
@@ -44,7 +44,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			this.uniformStruct = uniformStruct;
 		}
 
-		public int AddGroup<TEnumerator>(ref TEnumerator blockEnumerator, IBlockGroupBuilder builder) where TEnumerator : IEnumerator<int3>
+		public override int AddGroup<TEnumerator>(ref TEnumerator blockEnumerator, IBlockGroupBuilder builder)
 		{
 			int groupChunksChain = -1;
 			int chunkSize = blockAccessor.ChunkSize;
@@ -89,7 +89,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			}
 		}
 
-		public void RemoveGroup(int id)
+		public override void RemoveGroup(int id)
 		{
 			foreach(var cid in groupChunks.RemoveEnumerated(groups[id].chainId))
 			{
@@ -186,5 +186,12 @@ namespace PowerOfMind.Systems.ChunkBatchers
 	public interface IBlockGroupBuilder
 	{
 		void BuildChunk(int3 chunkIndex, IBlockAccessor blockAccessor, BlockLightUtil lightUtil, IBatchBuildContext batcher);
+	}
+
+	public abstract class BlockGroupBatcher
+	{
+		public abstract int AddGroup<TEnumerator>(ref TEnumerator blockEnumerator, IBlockGroupBuilder builder) where TEnumerator : IEnumerator<int3>;
+
+		public abstract void RemoveGroup(int id);
 	}
 }

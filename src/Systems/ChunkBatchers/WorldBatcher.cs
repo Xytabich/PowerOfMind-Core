@@ -13,7 +13,7 @@ using Vintagestory.API.Client;
 
 namespace PowerOfMind.Systems.ChunkBatchers
 {
-	public class WorldBatcher<TVertex, TUniform>
+	public class WorldBatcher<TVertex, TUniform> : WorldBatcher
 		where TVertex : unmanaged, IVertexStruct
 		where TUniform : unmanaged, IUniformsData
 	{
@@ -50,17 +50,17 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			bitBlockSize = chunkSize * chunkSize * chunkSize >> 5;
 		}
 
-		public int AddProvider(IBlockDataProvider provider)
+		public override int AddProvider(IBlockDataProvider provider)
 		{
 			return providers.Add(provider);
 		}
 
-		public void RemoveProvider(int id)
+		public override void RemoveProvider(int id)
 		{
 			providers.Remove(id);
 		}
 
-		public void AddBlock(int3 pos, int providerId)
+		public override void AddBlock(int3 pos, int providerId)
 		{
 			var offset = pos / chunkSize;
 			if(!chunkToId.TryGetValue(offset, out var id))
@@ -78,7 +78,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			batchingSystem.MarkBuilderDirty(chunks[id].batchingId);
 		}
 
-		public void RemoveBlock(int3 pos)
+		public override void RemoveBlock(int3 pos)
 		{
 			var offset = pos / chunkSize;
 			if(chunkToId.TryGetValue(offset, out var id))
@@ -405,6 +405,14 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				usageCounter = 0;
 			}
 		}
+	}
+
+	public abstract class WorldBatcher
+	{
+		public abstract int AddProvider(IBlockDataProvider provider);
+		public abstract void RemoveProvider(int id);
+		public abstract void AddBlock(int3 pos, int providerId);
+		public abstract void RemoveBlock(int3 pos);
 	}
 
 	[DebuggerTypeProxy(type: typeof(BitHelperDebugView))]

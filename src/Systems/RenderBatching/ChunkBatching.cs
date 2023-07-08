@@ -407,7 +407,7 @@ _fail:
 			ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-updatebegin");
 			if(ClientSettings.ShadowMapQuality > 0 && shadowShader == null)
 			{
-				shadowShader = graphics.ExtendStandardShader(ShaderPrograms.Shadowmapgeneric, new Dictionary<string, string>() {
+				shadowShader = graphics.ExtendStandardShader(EnumShaderProgram.Shadowmapgeneric, new Dictionary<string, string>() {
 					{ "vertexPositionIn", VertexAttributeAlias.POSITION },
 					{ "uvIn", VertexAttributeAlias.TEXCOORD_0 },
 					{ "rgbaLightIn", VertexAttributeAlias.LIGHT },

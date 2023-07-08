@@ -46,6 +46,11 @@ namespace PowerOfMind.Graphics
 			api.Event.ReloadShader += ReloadShaders;
 		}
 
+		public override bool ShouldLoad(EnumAppSide forSide)
+		{
+			return forSide == EnumAppSide.Client;
+		}
+
 		public override void Dispose()
 		{
 			base.Dispose();
@@ -117,12 +122,14 @@ namespace PowerOfMind.Graphics
 			return null;
 		}
 
-		public IExtendedShaderProgram ExtendStandardShader(ShaderProgramBase shader,
+		public IExtendedShaderProgram ExtendStandardShader(EnumShaderProgram shader,
 			IReadOnlyDictionary<string, string> attribNameToAlias = null,
 			IReadOnlyDictionary<string, string> uniformNameToAlias = null)
 		{
-			if(shader.Disposed) throw new InvalidOperationException("Shader must be initialized");
-			return new StandardShaderProxy(shader, this, attribNameToAlias, uniformNameToAlias);
+			if(ShaderRegistry.getProgram(shader)?.Disposed ?? true) throw new InvalidOperationException("Shader must be initialized");
+			var extShader = new StandardShaderProxy(shader, this, attribNameToAlias, uniformNameToAlias);
+			extShader.Compile();
+			return extShader;
 		}
 
 		internal bool TryCompileShaderStage(EnumShaderType type, string code, out int handle, out string error)
