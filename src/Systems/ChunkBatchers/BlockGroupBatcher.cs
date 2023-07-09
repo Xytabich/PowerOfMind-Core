@@ -145,7 +145,10 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				foreach(var id in batcher.chunkGroups.GetNodeEnumerable(groupChain))
 				{
 					ref readonly var record = ref batcher.chunkGroups[id];
-					batcher.groups[record.groupId].builder.BuildChunk(index, batcher.blockAccessor, blockLightUtil, context);
+					if(batcher.groups.TryGet(record.groupId, out var group))
+					{
+						group.builder?.BuildChunk(index, batcher.blockAccessor, blockLightUtil, context);
+					}
 				}
 
 				blockLightUtil.Clear();

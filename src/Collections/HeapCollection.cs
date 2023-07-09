@@ -38,7 +38,7 @@ namespace PowerOfMind.Collections
 			{
 				if(id == lastFreeIndex || indices[id] != -1)
 				{
-					throw new InvalidOperationException();
+					throw new InvalidOperationException("Heap value reference is invalid");
 				}
 				return ref values[id];
 			}
@@ -94,6 +94,13 @@ namespace PowerOfMind.Collections
 			indices[id] = lastFreeIndex;
 			lastFreeIndex = id;
 			valuesCount--;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool TryGet(int id, out T value)
+		{
+			value = values[id];
+			return id != lastFreeIndex && indices[id] == -1;
 		}
 	}
 }
