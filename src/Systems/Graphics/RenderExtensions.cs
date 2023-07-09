@@ -85,8 +85,21 @@ namespace PowerOfMind.Graphics
 		public static IDrawableHandle CreateDrawableProxy(this IRenderAPI rapi, IDrawableHandle refHandle, IDrawableInfo info)
 		{
 			var refContainer = (RefContainer)refHandle;
-			var container = new RefContainer();
+			var container = new RefContainer(refContainer);
 			container.indicesCount = info.IndicesCount;
+
+			switch(info.DrawMode)
+			{
+				case EnumDrawMode.Lines:
+					container.drawMode = PrimitiveType.Lines;
+					break;
+				case EnumDrawMode.LineStrip:
+					container.drawMode = PrimitiveType.LineStrip;
+					break;
+				default:
+					container.drawMode = PrimitiveType.Triangles;
+					break;
+			}
 
 			GL.BindVertexArray(container.vao);
 			var attribPointers = new List<int>();
@@ -111,9 +124,8 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Updates proxy vertex attributes.
 		/// </summary>
-		public static void UpdateDrawableProxy(this IRenderAPI rapi, IDrawableHandle refHandle, IDrawableHandle proxyHandle, IDrawableInfo info)
+		public static void UpdateDrawableProxy(this IRenderAPI rapi, IDrawableHandle proxyHandle, IDrawableInfo info)
 		{
-			var refContainer = (RefContainer)refHandle;
 			var container = (RefContainer)proxyHandle;
 			container.indicesCount = info.IndicesCount;
 
@@ -124,6 +136,7 @@ namespace PowerOfMind.Graphics
 				GL.VertexAttribDivisor((uint)loc, 0);
 			}
 
+			var refContainer = container.proxyFor;
 			var attribPointers = new List<int>();
 			int vBuffersCount = info.VertexBuffersCount;
 			for(int i = 0; i < vBuffersCount; i++)
@@ -350,6 +363,8 @@ namespace PowerOfMind.Graphics
 			public PrimitiveType drawMode;
 			public uint indicesCount;
 
+			public readonly RefContainer proxyFor;
+
 			public bool Initialized => vao != 0;
 			public bool Disposed => disposed;
 
@@ -364,13 +379,15 @@ namespace PowerOfMind.Graphics
 					vertexBuffers[i] = GL.GenBuffer();
 				}
 				vao = GL.GenVertexArray();
+				proxyFor = null;
 			}
 
-			public RefContainer()
+			public RefContainer(RefContainer proxyFor)
 			{
-				indexBuffer = 0;
-				vertexBuffers = Array.Empty<int>();
+				this.proxyFor = proxyFor;
+				vertexBuffers = null;
 				vao = GL.GenVertexArray();
+				indexBuffer = proxyFor.indexBuffer;
 			}
 
 			public void Dispose()
@@ -378,11 +395,14 @@ namespace PowerOfMind.Graphics
 				if(!disposed)
 				{
 					GL.DeleteVertexArray(vao);
-					for(int i = vertexBuffers.Length - 1; i >= 0; i--)
+					if(proxyFor == null)
 					{
-						GL.DeleteBuffer(vertexBuffers[i]);
+						for(int i = vertexBuffers.Length - 1; i >= 0; i--)
+						{
+							GL.DeleteBuffer(vertexBuffers[i]);
+						}
+						GL.DeleteBuffer(indexBuffer);
 					}
-					if(indexBuffer != 0) GL.DeleteBuffer(indexBuffer);
 
 					vao = 0;
 					indexBuffer = 0;

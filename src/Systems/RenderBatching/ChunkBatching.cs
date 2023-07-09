@@ -518,6 +518,7 @@ _fail:
 				if(!task.shadowDeclaration.IsEmpty)
 				{
 					chunkDataHelper.vertexDeclaration = task.shadowDeclaration;
+					chunkDataHelper.indicesCount = task.indicesCount;
 
 					if(shadowHandle == null)
 					{
@@ -525,7 +526,7 @@ _fail:
 					}
 					else
 					{
-						rapi.UpdateDrawableProxy(drawHandle, shadowHandle, chunkDataHelper);
+						rapi.UpdateDrawableProxy(shadowHandle, chunkDataHelper);
 					}
 				}
 				else if(shadowHandle != null)
@@ -957,7 +958,7 @@ _fail:
 							switch(cmd.Type)
 							{
 								case GraphicsCommandType.Draw:
-									callInfo.rapi.RenderDrawable(drawHandle, cmd.Offset, (int)cmd.Count);
+									callInfo.rapi.RenderDrawable(shadowHandle, cmd.Offset, (int)cmd.Count);
 									break;
 								case GraphicsCommandType.SetUniform:
 									index = shadowUniformsMap[cmd.Index];
