@@ -72,7 +72,7 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 			int vertIndex = 0;
 			int triIndex = 0;
 			int unitSegmentsCounter = 0;
-			while(lenLeft > 0f)
+			while(lenLeft > 0f && segmentCount > 0)
 			{
 				float partLen = Math.Min(lenLeft, segmentLength);
 				lightUtil.unmanaged.SetUpLightRGBs(lightUtil, chunkOrigin + (int3)(rayPos + rayDir * partLen * 0.5f));
@@ -110,6 +110,7 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 				lenLeft -= segmentLength;
 				overallLen += segmentLength;
 				rayPos += rayDir * segmentLength;
+				segmentCount--;
 			}
 
 			AddMesh(vertices, triangles, batcher);

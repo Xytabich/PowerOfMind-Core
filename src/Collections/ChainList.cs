@@ -10,6 +10,8 @@ namespace PowerOfMind.Collections
 	[DebuggerDisplay("Capacity Used: {count}")]
 	public class ChainList<T>
 	{
+		public int CapacityUsed => count;
+
 		private LinkedNode[] nodes;
 		private int lastFree;
 		private int count;

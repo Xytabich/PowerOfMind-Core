@@ -60,6 +60,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 					AddChunk(ref groupChunksChain, gid, chunk);
 				}
 			}
+			groups[gid] = new GroupInfo(groupChunksChain, builder);
 
 			return gid;
 
