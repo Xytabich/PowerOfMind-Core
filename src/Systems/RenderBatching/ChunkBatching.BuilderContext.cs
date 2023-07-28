@@ -66,7 +66,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					var attributes = new RefList<VertexAttribute>();
 					for(int i = 0; i < builders.Length; i++)
 					{
-						task.shader.MapDeclaration(task.container.builders[builders[i]].builderStruct.GetVertexDeclaration(), attributes);
+						task.shader.MapDeclaration(builders[i].GetVertexDeclaration(), attributes);
 						builderDeclarations[i] = new VertexDeclaration(attributes.ToArray());
 						attributes.Clear();
 					}
@@ -98,7 +98,7 @@ namespace PowerOfMind.Systems.RenderBatching
 										declaration.Attributes[j].Type,
 										declaration.Attributes[j].Size
 									);
-									var capi = task.container.capi;
+									var capi = task.capi;
 									capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:chunkbuildlog");
 									continue;
 								}
@@ -107,7 +107,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						}
 						if(vertStride == 0)
 						{
-							throw new Exception(string.Format("Builder {0} has no vertex attributes associated with the shader", task.container.builders[builders[i]].builderStruct.ToString()));
+							throw new Exception(string.Format("Builder {0} has no vertex attributes associated with the shader", builders[i].ToString()));
 						}
 
 						builderVertexMaps[i] = tmpMap.ToArray();
@@ -173,7 +173,7 @@ namespace PowerOfMind.Systems.RenderBatching
 									drawGroups.Add(new DrawGroup(drawUniformGroup, drawStartIndex, drawCount, renderPass));
 									drawCount = 0;
 								}
-								currentStruct = task.container.builders[task.builders[this.commands[i].arg0]].builderStruct;
+								currentStruct = task.builders[this.commands[i].arg0];
 
 								tmpUniformsMap.Clear();
 								task.shader.MapDeclarationInv(currentStruct.GetUniformsDeclaration(), tmpUniformsMap);
@@ -511,7 +511,7 @@ namespace PowerOfMind.Systems.RenderBatching
 						if(componentsToMap.Count > 0)
 						{
 							var declaration = builderDeclarations[builderIndex];
-							var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
+							var builderStruct = task.builders[builderIndex];
 							var stride = builderStruct.GetVertexStride();
 							builderStruct.ProvideVertexData(ptr => {
 								foreach(var p in componentsToMap)
@@ -538,7 +538,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 				private unsafe void MapUniforms<T>(in T uniformsData) where T : unmanaged, IUniformsData
 				{
-					var builderStruct = task.container.builders[task.builders[builderIndex]].builderStruct;
+					var builderStruct = task.builders[builderIndex];
 					tmpUniformsMap.Clear();
 					task.shader.MapDeclarationInv(uniformsData.GetDeclaration(), tmpUniformsMap);
 					builderStruct.DiffUniforms(uniformsData, uniformsMap, tmpUniformsMap, tmpPairs, this.uniformsData);

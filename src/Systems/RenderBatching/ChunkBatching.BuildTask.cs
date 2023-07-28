@@ -17,9 +17,7 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			public bool failed = false;
 
-			public readonly int[] builders;
-			public readonly int version;
-			public readonly int chunkShaderId;
+			public readonly IBuilderStructContainer[] builders;
 			public RenderPassGroup[] renderPasses;
 			public GraphicsCommand[] commands;
 			public UniformPointer[] uniformsMap;
@@ -35,18 +33,18 @@ namespace PowerOfMind.Systems.RenderBatching
 
 			public VertexDeclaration shadowDeclaration = default;
 
+			private readonly ICoreClientAPI capi;
 			private readonly IExtendedShaderProgram shader;
 			private readonly IExtendedShaderProgram shadowShader;
-			private readonly ChunkBatching container;
+			private readonly Action<BuildTask> onComplete;
 
-			public BuildTask(ChunkBatching container, IExtendedShaderProgram shader, IExtendedShaderProgram shadowShader, int[] builders, int version, int chunkShaderId)
+			public BuildTask(ICoreClientAPI capi, IExtendedShaderProgram shader, IExtendedShaderProgram shadowShader, IBuilderStructContainer[] builders, Action<BuildTask> onComplete)
 			{
-				this.container = container;
+				this.capi = capi;
 				this.shader = shader;
 				this.shadowShader = shadowShader;
 				this.builders = builders;
-				this.version = version;
-				this.chunkShaderId = chunkShaderId;
+				this.onComplete = onComplete;
 			}
 
 			public void Run()
@@ -55,7 +53,7 @@ namespace PowerOfMind.Systems.RenderBatching
 				{
 					for(int i = 0; i < builders.Length; i++)
 					{
-						container.builders[builders[i]].builderStruct.Init();
+						builders[i].Init();
 					}
 
 					var context = new BuilderContext(this);
@@ -65,7 +63,7 @@ namespace PowerOfMind.Systems.RenderBatching
 					{
 						context.SetBuilder(i);
 
-						var builderStruct = container.builders[builders[i]].builderStruct;
+						var builderStruct = builders[i];
 
 						context.uniformsMap.Clear();
 						shader.MapDeclarationInv(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
@@ -106,11 +104,11 @@ namespace PowerOfMind.Systems.RenderBatching
 										context.uniformToIndexMap.Clear();
 										for(int j = 0; j < builders.Length; j++)
 										{
-											var builderStruct = container.builders[builders[j]].builderStruct;
+											var declaration = builders[j].GetUniformsDeclaration();
 											context.uniformsMap.Clear();
-											shader.MapDeclaration(builderStruct.GetUniformsDeclaration(), context.uniformsMap);
+											shader.MapDeclaration(declaration, context.uniformsMap);
 											context.tmpUniformsMap.Clear();
-											shadowShader.MapDeclaration(builderStruct.GetUniformsDeclaration(), context.tmpUniformsMap);
+											shadowShader.MapDeclaration(declaration, context.tmpUniformsMap);
 											foreach(var pair in context.uniformsMap)
 											{
 												if(context.tmpUniformsMap.TryGetValue(pair.Key, out var index))
@@ -149,11 +147,10 @@ namespace PowerOfMind.Systems.RenderBatching
 				{
 					failed = true;
 					var msg = string.Format("Exception while trying to build a chunk grid:\n{0}", e);
-					var capi = container.capi;
 					capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:chunkbuildlog");
 				}
 
-				container.completedTasks.Add(this);
+				onComplete(this);
 			}
 
 			private static void AddAttrib(ref int byteOffset, VertexAttribute[] attributes, int attribIndex, RefList<VertexAttribute> outAttribs)

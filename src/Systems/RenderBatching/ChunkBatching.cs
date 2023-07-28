@@ -30,11 +30,12 @@ namespace PowerOfMind.Systems.RenderBatching
 		private readonly ChainList<BuilderInfo> builders = new ChainList<BuilderInfo>();
 
 		private readonly Queue<int> removeBuilderQueue = new Queue<int>();
-		private readonly ConcurrentBag<BuildTask> completedTasks = new ConcurrentBag<BuildTask>();
+		private readonly ConcurrentBag<ChunkBuildTask> completedTasks = new ConcurrentBag<ChunkBuildTask>();
 
 		private readonly HashSet<int> rebuildStructs = new HashSet<int>();
 
-		private readonly List<BuildTask> tmpTasksList = new List<BuildTask>();
+		private readonly List<ChunkBuildTask> tmpTasksList = new List<ChunkBuildTask>();
+		private readonly List<IBuilderStructContainer> tmpBuildersList = new List<IBuilderStructContainer>();
 		private readonly List<int> tmpIdsList = new List<int>();
 		private readonly Dictionary<int, int> tmpPairs = new Dictionary<int, int>();
 		private readonly ChunkDrawableData chunkDataHelper = new ChunkDrawableData();
@@ -443,10 +444,10 @@ _fail:
 			ScreenManager.FrameProfiler.Mark("powerofmind:chunkbatch-updateend");
 		}
 
-		private void ProcessCompletedTask(BuildTask task)
+		private void ProcessCompletedTask(ChunkBuildTask task)
 		{
 			bool forceRebuild = false;
-			foreach(var id in task.builders)
+			foreach(var id in task.builderIds)
 			{
 				var result = ReduceBuilderUsage(id);
 				if(result == EnumReduceUsageResult.RemovedChunkShader)
@@ -566,6 +567,7 @@ _fail:
 
 		private void CreateChunkBuildTask(int chunkShaderId)
 		{
+			tmpBuildersList.Clear();
 			tmpIdsList.Clear();
 			var chunkShaderInfo = chunkShaders[chunkShaderId];
 			chunkShaders[chunkShaderId].version = 1;
@@ -573,10 +575,18 @@ _fail:
 			do
 			{
 				tmpIdsList.Add(id);
+				tmpBuildersList.Add(builders[id].builderStruct);
 				builders[id].usageCounter++;
 			}
 			while(builders.TryGetNextId(chunkShaderInfo.buildersChain, id, out id));
-			tmpTasksList.Add(new BuildTask(this, shaders[chunkShaders[chunkShaderId].shaderId].shader, shadowShader, tmpIdsList.ToArray(), 1, chunkShaderId));
+			tmpTasksList.Add(new ChunkBuildTask(capi, shaders[chunkShaders[chunkShaderId].shaderId].shader, shadowShader,
+				tmpBuildersList.ToArray(), OnTaskComplete, 1, chunkShaderId, tmpIdsList.ToArray()));
+			tmpBuildersList.Clear();
+		}
+
+		private void OnTaskComplete(BuildTask task)
+		{
+			completedTasks.Add((ChunkBuildTask)task);
 		}
 
 		private EnumReduceUsageResult ReduceBuilderUsage(int id)
@@ -1036,6 +1046,21 @@ _fail:
 			public GraphicsSystem graphics;
 			public UniformPropertyHandle[] shaderUniforms;
 			public IExtendedShaderProgram shader;
+		}
+
+		private class ChunkBuildTask : BuildTask
+		{
+			public readonly int chunkShaderId;
+			public readonly int version;
+			public readonly int[] builderIds;
+
+			public ChunkBuildTask(ICoreClientAPI capi, IExtendedShaderProgram shader, IExtendedShaderProgram shadowShader, IBuilderStructContainer[] builders, Action<BuildTask> onComplete,
+				int version, int chunkShaderId, int[] builderIds) : base(capi, shader, shadowShader, builders, onComplete)
+			{
+				this.version = version;
+				this.chunkShaderId = chunkShaderId;
+				this.builderIds = builderIds;
+			}
 		}
 	}
 }
