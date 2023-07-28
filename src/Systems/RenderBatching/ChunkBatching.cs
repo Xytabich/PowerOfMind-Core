@@ -1,10 +1,12 @@
 ﻿using PowerOfMind.Collections;
 using PowerOfMind.Graphics;
+using PowerOfMind.Graphics.Drawable;
 using PowerOfMind.Graphics.Shader;
+using PowerOfMind.Systems.RenderBatching.Core;
+using PowerOfMind.Systems.RenderBatching.Draw;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
@@ -287,7 +289,7 @@ _fail:
 			rapi.GlPushMatrix();
 			rapi.GlLoadMatrix(rapi.CameraMatrixOrigin);
 
-			RenderCall renderInfo = default;
+			BatchDrawCall renderInfo = default;
 			renderInfo.graphics = graphics;
 			renderInfo.rapi = rapi;
 
@@ -371,7 +373,7 @@ _fail:
 					break;
 			}
 
-			RenderCall renderInfo = default;
+			BatchDrawCall renderInfo = default;
 			renderInfo.graphics = graphics;
 			renderInfo.rapi = rapi;
 			renderInfo.shader = shadowShader;
@@ -500,7 +502,7 @@ _fail:
 
 					//Then uploading data block-by-block
 					int lastIndex = task.verticesBlocks.Count - 1;
-					chunkDataHelper.verticesCount = BuildTask.BLOCK_SIZE;
+					chunkDataHelper.verticesCount = BatchBuildTask.BLOCK_SIZE;
 					chunkDataHelper.indicesCount = 0;//Uploading only vertices
 					chunkDataHelper.indicesData = null;
 					var vertBlockOffset = new int[1];
@@ -508,11 +510,11 @@ _fail:
 					{
 						if(i == lastIndex)
 						{
-							chunkDataHelper.verticesCount = task.verticesCount % BuildTask.BLOCK_SIZE;
+							chunkDataHelper.verticesCount = task.verticesCount % BatchBuildTask.BLOCK_SIZE;
 						}
 						chunkDataHelper.verticesData = task.verticesBlocks[i];
 						rapi.UpdateDrawablePart(drawHandle, chunkDataHelper, 0, vertBlockOffset);
-						vertBlockOffset[0] += BuildTask.BLOCK_SIZE;
+						vertBlockOffset[0] += BatchBuildTask.BLOCK_SIZE;
 					}
 				}
 
@@ -536,7 +538,7 @@ _fail:
 					shadowHandle = null;
 				}
 
-				chunkShader.drawer = new ChunkPartDrawer(drawHandle, shadowHandle, task.renderPasses, task.commands, task.uniformsMap, task.shadowUniformsMap, task.uniformsData);
+				chunkShader.drawer = new BatchDrawer(drawHandle, shadowHandle, task.renderPasses, task.commands, task.uniformsMap, task.shadowUniformsMap, task.uniformsData);
 
 				chunkDataHelper.Clear();
 			}
@@ -584,7 +586,7 @@ _fail:
 			tmpBuildersList.Clear();
 		}
 
-		private void OnTaskComplete(BuildTask task)
+		private void OnTaskComplete(BatchBuildTask task)
 		{
 			completedTasks.Add((ChunkBuildTask)task);
 		}
@@ -626,89 +628,6 @@ _fail:
 				return EnumReduceUsageResult.RemovedBuilder;
 			}
 			return EnumReduceUsageResult.None;
-		}
-
-		private unsafe static bool MemEquals(byte* a, byte* b, int length)
-		{
-			for(int i = length / 8; i > 0; i--)
-			{
-				if(*(long*)a != *(long*)b)
-				{
-					return false;
-				}
-				a += 8;
-				b += 8;
-			}
-
-			if((length & 4) != 0)
-			{
-				if(*((int*)a) != *((int*)b))
-				{
-					return false;
-				}
-				a += 4;
-				b += 4;
-			}
-
-			if((length & 2) != 0)
-			{
-				if(*((short*)a) != *((short*)b))
-				{
-					return false;
-				}
-				a += 2;
-				b += 2;
-			}
-
-			if((length & 1) != 0)
-			{
-				if(*a != *b)
-				{
-					return false;
-				}
-			}
-
-			return true;
-		}
-
-		private unsafe static bool MemIsZero(byte* a, int length)
-		{
-			for(int i = length / 8; i > 0; i--)
-			{
-				if(*(long*)a != 0)
-				{
-					return false;
-				}
-				a += 8;
-			}
-
-			if((length & 4) != 0)
-			{
-				if(*((int*)a) != 0)
-				{
-					return false;
-				}
-				a += 4;
-			}
-
-			if((length & 2) != 0)
-			{
-				if(*((short*)a) != 0)
-				{
-					return false;
-				}
-				a += 2;
-			}
-
-			if((length & 1) != 0)
-			{
-				if(*a != 0)
-				{
-					return false;
-				}
-			}
-
-			return true;
 		}
 
 		private enum EnumReduceUsageResult
@@ -790,7 +709,7 @@ _fail:
 			public int buildersChain;
 			public int version;
 
-			public ChunkPartDrawer drawer;
+			public BatchDrawer drawer;
 
 			public ChunkShaderUsage(int shaderId, int shaderChunkId)
 			{
@@ -814,252 +733,77 @@ _fail:
 			}
 		}
 
-		[StructLayout(LayoutKind.Sequential, Pack = 4)]
-		private readonly struct GraphicsCommand
-		{
-			public readonly GraphicsCommandType Type;
-			public readonly uint Offset;
-			public readonly uint Count;
-			public readonly uint Index;
-			public readonly uint Arg;
-
-			public GraphicsCommand(uint offset, uint count)
-			{
-				Type = GraphicsCommandType.Draw;
-				Offset = offset;
-				Count = count;
-				Index = 0;
-				Arg = 0;
-			}
-
-			public GraphicsCommand(uint offset, uint count, uint index)
-			{
-				Type = GraphicsCommandType.SetUniform;
-				Offset = offset;
-				Count = count;
-				Index = index;
-				Arg = 0;
-			}
-
-			public GraphicsCommand(uint offset, uint count, uint index, EnumTextureTarget target)
-			{
-				Type = GraphicsCommandType.BindTexture;
-				Offset = offset;
-				Count = count;
-				Index = index;
-				Arg = (uint)target;
-			}
-		}
-
-		private enum GraphicsCommandType
-		{
-			Draw,
-			SetUniform,
-			BindTexture
-		}
-
-		[StructLayout(LayoutKind.Sequential, Pack = 4)]
-		private readonly struct UniformPointer
-		{
-			public readonly int Index;
-			public readonly int Size;
-			public readonly int Count;
-
-			public UniformPointer(int index, int size, int count)
-			{
-				Index = index;
-				Size = size;
-				Count = count;
-			}
-		}
-
-		[StructLayout(LayoutKind.Sequential, Pack = 4)]
-		private readonly struct RenderPassGroup
-		{
-			public readonly EnumChunkRenderPass RenderPass;
-			public readonly int Index;
-			public readonly int Count;
-
-			public RenderPassGroup(EnumChunkRenderPass renderPass, int index, int count)
-			{
-				RenderPass = renderPass;
-				Index = index;
-				Count = count;
-			}
-		}
-
-		private class ChunkPartDrawer
-		{
-			public readonly IDrawableHandle drawHandle;
-			public readonly IDrawableHandle shadowHandle;
-			private readonly RenderPassGroup[] renderPasses;
-			private readonly GraphicsCommand[] commands;
-			private readonly UniformPointer[] uniformsMap;
-			private readonly int[] shadowUniformsMap;
-			private readonly byte[] uniformsData;
-			private readonly int maxUniformSize;
-
-			public ChunkPartDrawer(IDrawableHandle drawHandle, IDrawableHandle shadowHandle, RenderPassGroup[] renderPasses, GraphicsCommand[] commands, UniformPointer[] uniformsMap, int[] shadowUniformsMap, byte[] uniformsData)
-			{
-				this.drawHandle = drawHandle;
-				this.shadowHandle = shadowHandle;
-				this.renderPasses = renderPasses;
-				this.commands = commands;
-				this.uniformsMap = uniformsMap;
-				this.shadowUniformsMap = shadowUniformsMap;
-				this.uniformsData = uniformsData;
-
-				maxUniformSize = 0;
-				for(int i = uniformsMap.Length - 1; i >= 0; i--)
-				{
-					maxUniformSize = Math.Max(maxUniformSize, uniformsMap[i].Size);
-				}
-			}
-
-			public void Dispose()
-			{
-				drawHandle.Dispose();
-				shadowHandle?.Dispose();
-			}
-
-			public int TryGetPassIndex(EnumChunkRenderPass renderPass)
-			{
-				int lo = 0;
-				int hi = renderPasses.Length - 1;
-				while(lo <= hi)
-				{
-					int i = lo + ((hi - lo) >> 1);
-					int order = renderPasses[i].RenderPass.CompareTo(renderPass);
-
-					if(order == 0)
-					{
-						return i;
-					}
-
-					if(order < 0)
-					{
-						lo = i + 1;
-					}
-					else
-					{
-						hi = i - 1;
-					}
-				}
-
-				return -1;
-			}
-
-			public unsafe void RenderShadow(ref RenderCall callInfo, ref byte[] dummyBytes)
-			{
-				if(dummyBytes.Length < maxUniformSize)
-				{
-					dummyBytes = new byte[maxUniformSize];
-				}
-
-				fixed(byte* dataPtr = uniformsData)
-				{
-					fixed(byte* zeroPtr = dummyBytes)
-					{
-						int last = renderPasses[callInfo.pass].Index + renderPasses[callInfo.pass].Count;
-						int index;
-						for(int i = renderPasses[callInfo.pass].Index; i < last; i++)
-						{
-							var cmd = commands[i];
-							switch(cmd.Type)
-							{
-								case GraphicsCommandType.Draw:
-									callInfo.rapi.RenderDrawable(shadowHandle, cmd.Offset, (int)cmd.Count);
-									break;
-								case GraphicsCommandType.SetUniform:
-									index = shadowUniformsMap[cmd.Index];
-									if(index >= 0)
-									{
-										callInfo.shaderUniforms[index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
-									}
-									break;
-								case GraphicsCommandType.BindTexture:
-									index = shadowUniformsMap[cmd.Index];
-									if(index >= 0)
-									{
-										callInfo.shader.BindTexture(index, (EnumTextureTarget)cmd.Arg, *(int*)(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset)));
-									}
-									break;
-							}
-						}
-
-						//Reset uniforms
-						for(int i = shadowUniformsMap.Length - 1; i >= 0; i--)
-						{
-							index = shadowUniformsMap[i];
-							if(index >= 0)
-							{
-								callInfo.shaderUniforms[index].SetValue(zeroPtr, uniformsMap[i].Count);
-							}
-						}
-					}
-				}
-			}
-
-			public unsafe void Render(ref RenderCall callInfo, ref byte[] dummyBytes)
-			{
-				if(dummyBytes.Length < maxUniformSize)
-				{
-					dummyBytes = new byte[maxUniformSize];
-				}
-
-				fixed(byte* dataPtr = uniformsData)
-				{
-					fixed(byte* zeroPtr = dummyBytes)
-					{
-						int last = renderPasses[callInfo.pass].Index + renderPasses[callInfo.pass].Count;
-						for(int i = renderPasses[callInfo.pass].Index; i < last; i++)
-						{
-							var cmd = commands[i];
-							switch(cmd.Type)
-							{
-								case GraphicsCommandType.Draw:
-									callInfo.rapi.RenderDrawable(drawHandle, cmd.Offset, (int)cmd.Count);
-									break;
-								case GraphicsCommandType.SetUniform:
-									callInfo.shaderUniforms[uniformsMap[cmd.Index].Index].SetValue(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset), (int)cmd.Count);
-									break;
-								case GraphicsCommandType.BindTexture:
-									callInfo.shader.BindTexture(uniformsMap[cmd.Index].Index, (EnumTextureTarget)cmd.Arg, *(int*)(cmd.Offset == uint.MaxValue ? zeroPtr : (dataPtr + cmd.Offset)));
-									break;
-							}
-						}
-
-						//Reset uniforms
-						for(int i = uniformsMap.Length - 1; i >= 0; i--)
-						{
-							callInfo.shaderUniforms[uniformsMap[i].Index].SetValue(zeroPtr, uniformsMap[i].Count);
-						}
-					}
-				}
-			}
-		}
-
-		private ref struct RenderCall
-		{
-			public IRenderAPI rapi;
-			public int pass;
-			public GraphicsSystem graphics;
-			public UniformPropertyHandle[] shaderUniforms;
-			public IExtendedShaderProgram shader;
-		}
-
-		private class ChunkBuildTask : BuildTask
+		private class ChunkBuildTask : BatchBuildTask
 		{
 			public readonly int chunkShaderId;
 			public readonly int version;
 			public readonly int[] builderIds;
 
-			public ChunkBuildTask(ICoreClientAPI capi, IExtendedShaderProgram shader, IExtendedShaderProgram shadowShader, IBuilderStructContainer[] builders, Action<BuildTask> onComplete,
+			public ChunkBuildTask(ICoreClientAPI capi, IExtendedShaderProgram shader, IExtendedShaderProgram shadowShader, IBuilderStructContainer[] builders, Action<BatchBuildTask> onComplete,
 				int version, int chunkShaderId, int[] builderIds) : base(capi, shader, shadowShader, builders, onComplete)
 			{
 				this.version = version;
 				this.chunkShaderId = chunkShaderId;
 				this.builderIds = builderIds;
+			}
+		}
+
+		private class ChunkDrawableData : IDrawableData
+		{
+			EnumDrawMode IDrawableInfo.DrawMode => EnumDrawMode.Triangles;
+			uint IDrawableInfo.IndicesCount => indicesCount;
+			uint IDrawableInfo.VerticesCount => verticesCount;
+			int IDrawableInfo.VertexBuffersCount => 1;
+
+			public uint indicesCount, verticesCount;
+			public int verticesStride;
+			public VertexDeclaration vertexDeclaration;
+
+			public byte[] verticesData;
+			public uint[] indicesData;
+
+			public void Clear()
+			{
+				vertexDeclaration = default;
+				verticesData = null;
+				indicesData = null;
+			}
+
+			unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+			{
+				if(indicesData == null) context.Process(null);
+				else
+				{
+					fixed(uint* ptr = indicesData)
+					{
+						context.Process(ptr);
+					}
+				}
+			}
+
+			unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+			{
+				if(verticesData == null)
+				{
+					context.Process((byte*)null, verticesStride);
+				}
+				else
+				{
+					fixed(byte* ptr = verticesData)
+					{
+						context.Process(ptr, verticesStride);
+					}
+				}
+			}
+
+			IndicesMeta IDrawableInfo.GetIndicesMeta()
+			{
+				return new IndicesMeta(false);
+			}
+
+			VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
+			{
+				return new VertexBufferMeta(vertexDeclaration, false);
 			}
 		}
 	}
