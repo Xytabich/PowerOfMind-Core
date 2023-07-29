@@ -438,7 +438,7 @@ _fail:
 			{
 				foreach(var task in tmpTasksList)
 				{
-					TyronThreadPool.QueueTask(task.Run);
+					TyronThreadPool.QueueTask(task.Run, "powerofmind:chunkbatch");
 				}
 
 				tmpTasksList.Clear();

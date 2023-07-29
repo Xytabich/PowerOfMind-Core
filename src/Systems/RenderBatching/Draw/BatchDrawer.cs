@@ -66,16 +66,16 @@ namespace PowerOfMind.Systems.RenderBatching.Draw
 			return -1;
 		}
 
-		public unsafe void RenderShadow(ref BatchDrawCall callInfo, ref byte[] dummyBytes)
+		public unsafe void RenderShadow(ref BatchDrawCall callInfo, ref byte[] zeroBytes)
 		{
-			if(dummyBytes.Length < maxUniformSize)
+			if(zeroBytes.Length < maxUniformSize)
 			{
-				dummyBytes = new byte[maxUniformSize];
+				zeroBytes = new byte[maxUniformSize];
 			}
 
 			fixed(byte* dataPtr = uniformsData)
 			{
-				fixed(byte* zeroPtr = dummyBytes)
+				fixed(byte* zeroPtr = zeroBytes)
 				{
 					int last = renderPasses[callInfo.pass].Index + renderPasses[callInfo.pass].Count;
 					int index;
@@ -117,16 +117,16 @@ namespace PowerOfMind.Systems.RenderBatching.Draw
 			}
 		}
 
-		public unsafe void Render(ref BatchDrawCall callInfo, ref byte[] dummyBytes)
+		public unsafe void Render(ref BatchDrawCall callInfo, ref byte[] zeroBytes)
 		{
-			if(dummyBytes.Length < maxUniformSize)
+			if(zeroBytes.Length < maxUniformSize)
 			{
-				dummyBytes = new byte[maxUniformSize];
+				zeroBytes = new byte[maxUniformSize];
 			}
 
 			fixed(byte* dataPtr = uniformsData)
 			{
-				fixed(byte* zeroPtr = dummyBytes)
+				fixed(byte* zeroPtr = zeroBytes)
 				{
 					int last = renderPasses[callInfo.pass].Index + renderPasses[callInfo.pass].Count;
 					for(int i = renderPasses[callInfo.pass].Index; i < last; i++)

@@ -1,15 +1,24 @@
 ﻿using PowerOfMind.Graphics.Shader;
+using System.Runtime.CompilerServices;
 using Vintagestory.API.MathTools;
 
 namespace PowerOfMind.Graphics
 {
 	public static class ShaderUniformExtensions
 	{
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public static UniformPropertyHandle FindUniform(this IExtendedShaderProgram shader, string name)
+		{
+			return shader.Uniforms[shader.FindUniformIndex(name)];
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static unsafe void SetValue<T>(this in UniformPropertyHandle handle, T value) where T : unmanaged
 		{
 			handle.SetValue(&value, 1);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static unsafe void SetValue<T>(this in UniformPropertyHandle handle, T[] values) where T : unmanaged
 		{
 			fixed(T* ptr = values)
@@ -18,11 +27,13 @@ namespace PowerOfMind.Graphics
 			}
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static unsafe void SetValues<T>(this in UniformPropertyHandle handle, T value, int count) where T : unmanaged
 		{
 			handle.SetValue(&value, count);
 		}
 
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public static unsafe void SetValues<T>(this in UniformPropertyHandle handle, T[] values, int count) where T : unmanaged
 		{
 			fixed(T* ptr = values)
