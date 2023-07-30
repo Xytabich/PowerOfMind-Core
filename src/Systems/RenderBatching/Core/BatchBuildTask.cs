@@ -148,8 +148,8 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 			catch(Exception e)
 			{
 				failed = true;
-				var msg = string.Format("Exception while trying to build a chunk grid:\n{0}", e);
-				capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:chunkbuildlog");
+				var msg = string.Format("Exception while trying to build a batch:\n{0}", e);
+				capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:batchbuildlog");
 			}
 
 			onComplete(this);

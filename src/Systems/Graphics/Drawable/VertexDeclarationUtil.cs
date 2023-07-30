@@ -27,6 +27,7 @@ namespace PowerOfMind.Graphics
 					uint componentSize = 1;
 					int location = -1;
 					string alias = null;
+					uint instanceDivisor = 0;
 
 					bool normalized = false;
 					bool asInteger = false;
@@ -38,6 +39,7 @@ namespace PowerOfMind.Graphics
 						location = attr.Location;
 						normalized = attr.Normalized;
 						asInteger = attr.AsInteger;
+						instanceDivisor = attr.InstanceDivisor;
 
 						uint typeSize = (uint)Marshal.SizeOf(fieldType);
 						componentType = attr.Type;
@@ -126,7 +128,7 @@ namespace PowerOfMind.Graphics
 							throw new Exception(string.Format("{0} is not primitive type", fieldType));
 						}
 					}
-					if(componentSize < 1 || componentSize > 4)
+					if(componentSize < 1 || componentSize > 16)
 					{
 						throw new Exception(string.Format("Invalid component size {0} for field '{1}'", componentSize, field));
 					}
@@ -136,7 +138,7 @@ namespace PowerOfMind.Graphics
 						location,
 						(uint)sizeof(T),
 						(uint)Marshal.OffsetOf<T>(field.Name),
-						0,
+						instanceDivisor,
 						componentSize,
 						componentType,
 						normalized,

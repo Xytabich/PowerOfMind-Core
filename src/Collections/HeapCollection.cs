@@ -97,6 +97,12 @@ namespace PowerOfMind.Collections
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
+		public bool IsAllocated(int id)
+		{
+			return id != lastFreeIndex && indices[id] == -1;
+		}
+
+		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGet(int id, out T value)
 		{
 			value = values[id];

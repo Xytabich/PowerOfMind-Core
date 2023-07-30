@@ -666,6 +666,10 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 			private void EnsureCapacity()
 			{
+				if(currentVertBlock == task.verticesBlocks.Count)//if the previous block was filled to the boundary
+				{
+					task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
+				}
 				if(currentVertCount > BLOCK_SIZE - vertOffsetLocal)
 				{
 					int addBlocks = (currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1;
@@ -674,6 +678,11 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 						task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
 						addBlocks--;
 					}
+				}
+
+				if(currentIndBlock == indicesBlocks.Count)//if the previous block was filled to the boundary
+				{
+					indicesBlocks.Add(new uint[BLOCK_SIZE]);
 				}
 				if(currentIndCount > BLOCK_SIZE - indOffsetLocal)
 				{

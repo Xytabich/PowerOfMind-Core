@@ -45,7 +45,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			verticesCullProcessor = VerticesCullProcessor;
 		}
 
-		public bool BuildIndices(IDrawableData original, int cullSides, bool cullBackfaces)
+		public bool BuildData(IDrawableData original, int cullSides, bool cullBackfaces)
 		{
 			this.original = original;
 			this.cullSides = cullSides;

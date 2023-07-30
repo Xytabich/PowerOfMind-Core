@@ -132,16 +132,30 @@ namespace PowerOfMind.Graphics
 		{
 			if(context.BufferIndex == 0)
 			{
-				fixed(TStatic* ptr = StaticVertices)
+				if(StaticVertices == null)
 				{
-					context.Process(ptr + VerticesOffset, sizeof(TStatic));
+					context.Process(null, sizeof(TStatic));
+				}
+				else
+				{
+					fixed(TStatic* ptr = StaticVertices)
+					{
+						context.Process(ptr + VerticesOffset, sizeof(TStatic));
+					}
 				}
 			}
 			else
 			{
-				fixed(TDynamic* ptr = DynamicVertices)
+				if(DynamicVertices == null)
 				{
-					context.Process(ptr + VerticesOffset, sizeof(TDynamic));
+					context.Process(null, sizeof(TDynamic));
+				}
+				else
+				{
+					fixed(TDynamic* ptr = DynamicVertices)
+					{
+						context.Process(ptr + VerticesOffset, sizeof(TDynamic));
+					}
 				}
 			}
 		}

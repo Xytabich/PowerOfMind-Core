@@ -13,5 +13,6 @@
 		public const string FLAGS = "FLAGS";
 		public const string COLORMAP = "COLORMAP";
 		public const string JOINT_ID = "JOINT_ID";
+		public const string TRANSFORM = "TRANSFORM";
 	}
 }

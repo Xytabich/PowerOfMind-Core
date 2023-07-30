@@ -38,7 +38,8 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Uploads the mesh data to the GPU, returns a handle that can be used to update the data or free memory.
 		/// </summary>
-		public static unsafe IDrawableHandle UploadDrawable(this IRenderAPI rapi, IDrawableData data)
+		/// <param name="initEmptyBuffer">Affects the behavior if <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer. If set to <see langword="false"/>, then the buffer will not be initialized. If <see langword="true"/>, memory will be allocated for the buffer without filling with data.</param>
+		public static unsafe IDrawableHandle UploadDrawable(this IRenderAPI rapi, IDrawableData data, bool initEmptyBuffer = true)
 		{
 			int vBuffersCount = data.VertexBuffersCount;
 			var container = new RefContainer(data.VertexBuffersCount);
@@ -61,6 +62,7 @@ namespace PowerOfMind.Graphics
 
 			var attribPointers = new List<int>();
 			var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
+			uploadVerts.ignoreNull = !initEmptyBuffer;
 			for(int i = 0; i < vBuffersCount; i++)
 			{
 				var meta = data.GetVertexBufferMeta(i);
@@ -80,7 +82,7 @@ namespace PowerOfMind.Graphics
 		}
 
 		/// <summary>
-		/// Creates a proxy for the reference handle data. Proxy allows to use a different set of vertex attributers.
+		/// Creates a proxy for the reference handle data. Proxy allows to use a different set of vertex attributers for the same data buffers.
 		/// </summary>
 		public static IDrawableHandle CreateDrawableProxy(this IRenderAPI rapi, IDrawableHandle refHandle, IDrawableInfo info)
 		{
@@ -158,7 +160,8 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Resizes the data buffers for the given handle, this may be needed if the number of vertices or indexes has changed.
 		/// </summary>
-		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, bool updateVertexDeclaration = false)
+		/// <param name="initEmptyBuffer">Affects the behavior if <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer. If set to <see langword="false"/>, it will not modify the buffer. If <see langword="true"/>, memory will be allocated for the buffer without filling with data.</param>
+		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, bool updateVertexDeclaration = false, bool initEmptyBuffer = true)
 		{
 			var container = (RefContainer)handle;
 			container.indicesCount = data.IndicesCount;
@@ -176,6 +179,7 @@ namespace PowerOfMind.Graphics
 
 				var attribPointers = new List<int>();
 				var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
+				uploadVerts.ignoreNull = !initEmptyBuffer;
 				for(int i = 0; i < vBuffersCount; i++)
 				{
 					var meta = data.GetVertexBufferMeta(i);
@@ -192,6 +196,7 @@ namespace PowerOfMind.Graphics
 			else
 			{
 				var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
+				uploadVerts.ignoreNull = initEmptyBuffer;
 				for(int i = 0; i < vBuffersCount; i++)
 				{
 					var meta = data.GetVertexBufferMeta(i);
@@ -207,6 +212,7 @@ namespace PowerOfMind.Graphics
 
 		/// <summary>
 		/// Updates the vertex and index data for the given handle.
+		/// If <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer, then the data will not be modified.
 		/// If the number of vertices or indexes has changed since <see cref="UploadDrawable"/>, use <see cref="ReuploadDrawable"/> instead.
 		/// </summary>
 		public static unsafe void UpdateDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data)
@@ -232,10 +238,11 @@ namespace PowerOfMind.Graphics
 		}
 
 		/// <summary>
-		/// Updates part of the mesh's data.
+		/// Updates part of the data buffers.
+		/// If <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer, then the data will not be modified.
 		/// </summary>
 		/// <param name="indicesBufferOffset">From which buffer element to start the update</param>
-		/// <param name="verticesBufferOffsets">From which buffer element to start the update</param>
+		/// <param name="verticesBufferOffsets">From which buffer element to start the update. Size must be at least <see cref="IDrawableInfo.VertexBuffersCount"/>.</param>
 		public static unsafe void UpdateDrawablePart(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, int indicesBufferOffset, params int[] verticesBufferOffsets)
 		{
 			var container = (RefContainer)handle;
@@ -312,6 +319,68 @@ namespace PowerOfMind.Graphics
 			}
 			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.DrawElements(container.drawMode, indicesCount, DrawElementsType.UnsignedInt, (IntPtr)indicesOffset);
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			for(int i = 0; i < len; i++)
+			{
+				GL.DisableVertexAttribArray(attribPointers[i]);
+			}
+			GL.BindVertexArray(0);
+		}
+
+		public static void RenderDrawableInstanced(this IRenderAPI rapi, IDrawableHandle handle, int instancesCount)
+		{
+			RuntimeStats.drawCallsCount++;
+			if(!handle.Initialized)
+			{
+				throw new ArgumentException("Fatal: Trying to render an uninitialized drawable");
+			}
+			if(handle.Disposed)
+			{
+				throw new ArgumentException("Fatal: Trying to render a disposed drawable");
+			}
+
+			var container = (RefContainer)handle;
+			GL.BindVertexArray(container.vao);
+
+			var attribPointers = container.attribPointers;
+			int len = attribPointers.Length;
+			for(int i = 0; i < len; i++)
+			{
+				GL.EnableVertexAttribArray(attribPointers[i]);
+			}
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+			GL.DrawElementsInstanced(container.drawMode, (int)container.indicesCount, DrawElementsType.UnsignedInt, 0, instancesCount);
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			for(int i = 0; i < len; i++)
+			{
+				GL.DisableVertexAttribArray(attribPointers[i]);
+			}
+			GL.BindVertexArray(0);
+		}
+
+		public static void RenderDrawableInstanced(this IRenderAPI rapi, IDrawableHandle handle, uint indicesOffset, int indicesCount, int instancesCount)
+		{
+			RuntimeStats.drawCallsCount++;
+			if(!handle.Initialized)
+			{
+				throw new ArgumentException("Fatal: Trying to render an uninitialized drawable");
+			}
+			if(handle.Disposed)
+			{
+				throw new ArgumentException("Fatal: Trying to render a disposed drawable");
+			}
+
+			var container = (RefContainer)handle;
+			GL.BindVertexArray(container.vao);
+
+			var attribPointers = container.attribPointers;
+			int len = attribPointers.Length;
+			for(int i = 0; i < len; i++)
+			{
+				GL.EnableVertexAttribArray(attribPointers[i]);
+			}
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+			GL.DrawElementsInstanced(container.drawMode, indicesCount, DrawElementsType.UnsignedInt, (IntPtr)indicesOffset, instancesCount);
 			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
@@ -417,6 +486,7 @@ namespace PowerOfMind.Graphics
 		{
 			public bool isDynamic;
 			public int bufferIndex;
+			public bool ignoreNull = false;
 			public readonly VerticesContext.ProcessorDelegate Process;
 
 			private readonly RefContainer container;
@@ -431,6 +501,7 @@ namespace PowerOfMind.Graphics
 
 			private unsafe void ProcessImpl(void* data, int stride)
 			{
+				if(ignoreNull && data == null) return;
 				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
 				GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(verticesCount * (uint)stride), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
 			}

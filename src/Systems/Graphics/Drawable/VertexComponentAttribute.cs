@@ -12,6 +12,7 @@ namespace PowerOfMind.Graphics
 		public string Alias = null;
 		public bool Normalized = false;
 		public bool AsInteger = false;
+		public uint InstanceDivisor = 0;
 		public EnumShaderPrimitiveType Type = EnumShaderPrimitiveType.Unknown;
 
 		public VertexComponentAttribute(int location)

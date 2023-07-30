@@ -154,16 +154,15 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			int3 pos;
 			public long SetUpLightRGBs(BlockLightUtil managed, int3 blockPos)
 			{
-				ClientChunk chunk;
 				BlockFacing face;
 
 				for(int i = 0; i < 27; i++)
 				{
 					pos = blockOffsets[i] + blockPos;
-					chunk = (ClientChunk)managed.blockAccessor.GetChunkAtBlockPos(pos.x, pos.y, pos.z);
-					if(chunk != null)
+					var chunkData = ((ClientChunk)managed.blockAccessor.GetChunkAtBlockPos(pos.x, pos.y, pos.z))?.Data;
+					if(chunkData != null)
 					{
-						blockId = chunkGetOneBlockData(chunk.Data, out light, out lightSat, out fluidId,
+						blockId = chunkGetOneBlockData(chunkData, out light, out lightSat, out fluidId,
 						   MapUtil.Index3d(pos.x & chunkSizeMask, pos.y & chunkSizeMask, pos.z & chunkSizeMask, chunkSize, chunkSize));
 						managed.currentChunkBlocksExt[i] = managed.blockAccessor.GetBlock(blockId);
 						managed.currentChunkFluidBlocksExt[i] = managed.blockAccessor.GetBlock(fluidId);

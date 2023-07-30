@@ -353,7 +353,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 						break;
 				}
 
-				if(buildData.BuildIndices(data, cullSides, cullBackfaces))
+				if(buildData.BuildData(data, cullSides, cullBackfaces))
 				{
 					offsetShell.Init(buildData, blockOffset);
 					chunkContext.AddData(offsetShell, uniformsData, renderPass);
@@ -383,7 +383,7 @@ namespace PowerOfMind.Systems.ChunkBatchers
 						break;
 				}
 
-				if(buildData.BuildIndices(data, cullSides, cullBackfaces))
+				if(buildData.BuildData(data, cullSides, cullBackfaces))
 				{
 					offsetShell.Init(buildData, blockOffset);
 					chunkContext.AddData(offsetShell, renderPass);
