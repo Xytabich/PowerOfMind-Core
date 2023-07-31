@@ -7,9 +7,9 @@ namespace PowerOfMind.Graphics
 	public static class ShaderUniformExtensions
 	{
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public static UniformPropertyHandle FindUniform(this IExtendedShaderProgram shader, string name)
+		public static ref readonly UniformPropertyHandle FindUniform(this IExtendedShaderProgram shader, string name)
 		{
-			return shader.Uniforms[shader.FindUniformIndex(name)];
+			return ref shader.Uniforms[shader.FindUniformIndex(name)];
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
