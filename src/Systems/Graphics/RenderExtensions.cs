@@ -75,6 +75,7 @@ namespace PowerOfMind.Graphics
 
 			container.attribPointers = attribPointers.ToArray();
 
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, data.GetIndicesMeta().IsDynamic).Upload));
 
 			GL.BindVertexArray(0);
@@ -119,6 +120,7 @@ namespace PowerOfMind.Graphics
 
 			container.attribPointers = attribPointers.ToArray();
 
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.BindVertexArray(0);
 			return container;
 		}
@@ -154,6 +156,7 @@ namespace PowerOfMind.Graphics
 
 			container.attribPointers = attribPointers.ToArray();
 
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.BindVertexArray(0);
 		}
 
@@ -207,7 +210,9 @@ namespace PowerOfMind.Graphics
 				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 			}
 
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, data.GetIndicesMeta().IsDynamic).Upload));
+			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 		}
 
 		/// <summary>
@@ -233,7 +238,9 @@ namespace PowerOfMind.Graphics
 
 			if(data.IndicesCount > 0)
 			{
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Update));
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			}
 		}
 
@@ -261,7 +268,9 @@ namespace PowerOfMind.Graphics
 
 			if(data.IndicesCount > 0)
 			{
-				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, (uint)indicesBufferOffset).UpdatePartial));
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, (uint)indicesBufferOffset, data.IndicesCount).UpdatePartial));
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			}
 		}
 
@@ -286,9 +295,7 @@ namespace PowerOfMind.Graphics
 			{
 				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.DrawElements(container.drawMode, (int)container.indicesCount, DrawElementsType.UnsignedInt, 0);
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
 				GL.DisableVertexAttribArray(attribPointers[i]);
@@ -317,9 +324,7 @@ namespace PowerOfMind.Graphics
 			{
 				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.DrawElements(container.drawMode, indicesCount, DrawElementsType.UnsignedInt, (IntPtr)indicesOffset);
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
 				GL.DisableVertexAttribArray(attribPointers[i]);
@@ -348,9 +353,7 @@ namespace PowerOfMind.Graphics
 			{
 				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.DrawElementsInstanced(container.drawMode, (int)container.indicesCount, DrawElementsType.UnsignedInt, 0, instancesCount);
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
 				GL.DisableVertexAttribArray(attribPointers[i]);
@@ -379,9 +382,7 @@ namespace PowerOfMind.Graphics
 			{
 				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
 			GL.DrawElementsInstanced(container.drawMode, indicesCount, DrawElementsType.UnsignedInt, (IntPtr)indicesOffset, instancesCount);
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 			for(int i = 0; i < len; i++)
 			{
 				GL.DisableVertexAttribArray(attribPointers[i]);
@@ -560,41 +561,45 @@ namespace PowerOfMind.Graphics
 			private readonly RefContainer container;
 			private readonly uint offset;
 			private readonly bool isDynamic;
+			private readonly uint indicesCount;
 
-			public IndicesProcessorImpl(RefContainer container, uint offset = 0)
+			public IndicesProcessorImpl(RefContainer container)
 			{
 				this.container = container;
+				indicesCount = container.indicesCount;
+				offset = 0;
+			}
+
+			public IndicesProcessorImpl(RefContainer container, uint offset, uint indicesCount)
+			{
+				this.container = container;
+				this.indicesCount = indicesCount;
 				this.offset = offset;
 			}
 
-			public IndicesProcessorImpl(RefContainer container, bool isDynamic, uint offset = 0)
+			public IndicesProcessorImpl(RefContainer container, bool isDynamic)
 			{
 				this.container = container;
-				this.offset = offset;
 				this.isDynamic = isDynamic;
+				indicesCount = container.indicesCount;
+				offset = 0;
 			}
 
 			public unsafe void Upload(uint* data)
 			{
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				GL.BufferData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * container.indicesCount), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				GL.BufferData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * indicesCount), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
 			}
 
 			public unsafe void Update(uint* data)
 			{
 				if(data == null) return;
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, (IntPtr)(4 * container.indicesCount), (IntPtr)data);
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, (IntPtr)(4 * indicesCount), (IntPtr)data);
 			}
 
 			public unsafe void UpdatePartial(uint* data)
 			{
 				if(data == null) return;
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), (IntPtr)(4 * container.indicesCount), (IntPtr)data);
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), (IntPtr)(4 * indicesCount), (IntPtr)data);
 			}
 		}
 	}
