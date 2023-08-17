@@ -16,12 +16,6 @@ namespace PowerOfMind.Systems.ChunkBatchers
 		uint IDrawableInfo.VerticesCount => verticesCount;
 		int IDrawableInfo.VertexBuffersCount => original.VertexBuffersCount;
 
-		private readonly IndicesContext.ProcessorDelegate indicesProcessor;
-		private readonly VerticesContext.ProcessorDelegate verticesProcessor;
-		private readonly VerticesContext.ProcessorDelegate verticesCullProcessor;
-
-		private VerticesContext.ProcessorDelegate vertProcessorRef = null;
-
 		private IDrawableData original;
 		private uint indicesCount;
 		private uint verticesCount;
@@ -32,18 +26,10 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 		private MeshTopology topology;
 
-		private bool hasIndices = false;
 		private uint posDataOffset;
 
 		private bool cullBackfaces = false;
 		private int cullSides = 0;
-
-		public unsafe DrawableUnitCubeCuller()
-		{
-			indicesProcessor = IndicesProcessor;
-			verticesProcessor = VerticesProcessor;
-			verticesCullProcessor = VerticesCullProcessor;
-		}
 
 		public bool BuildData(IDrawableData original, int cullSides, bool cullBackfaces)
 		{
@@ -68,34 +54,33 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				topology = MeshTopology.Triangle;
 			}
 
-			hasIndices = false;
-			original.ProvideIndices(new IndicesContext(indicesProcessor));
-			if(hasIndices)
+			var indData = original.GetIndicesData();
+			if(indData.IsEmpty) return false;
+			indData.Slice(0, (int)original.IndicesCount).CopyTo(indices);
+
+			var vBuffCount = original.VertexBuffersCount;
+			for(int i = 0; i < vBuffCount; i++)
 			{
-				var vBuffCount = original.VertexBuffersCount;
-				for(int i = 0; i < vBuffCount; i++)
+				var meta = original.GetVertexBufferMeta(i);
+				if(meta.IsDynamic) continue;
+				var attributes = meta.Declaration.Attributes;
+				for(int j = 0; j < attributes.Length; j++)
 				{
-					var meta = original.GetVertexBufferMeta(i);
-					if(meta.IsDynamic) continue;
-					var attributes = meta.Declaration.Attributes;
-					for(int j = 0; j < attributes.Length; j++)
+					ref readonly var attr = ref attributes[j];
+					if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
 					{
-						ref readonly var attr = ref attributes[j];
-						if(attr.Alias == VertexAttributeAlias.POSITION && attr.Type == EnumShaderPrimitiveType.Float && attr.Size >= 3)
+						posDataOffset = attr.Offset;
+						CullIndices(original.GetVerticesData(i), original.GetVertexBufferMeta(i).Stride);
+						switch(topology)
 						{
-							posDataOffset = attr.Offset;
-							original.ProvideVertices(new VerticesContext(verticesProcessor, i));
-							switch(topology)
-							{
-								case MeshTopology.Quad:
-									verticesCount = (indicesCount / 6) * 4;
-									break;
-								case MeshTopology.Triangle:
-									verticesCount = indicesCount;
-									break;
-							}
-							return indicesCount > 0;
+							case MeshTopology.Quad:
+								verticesCount = (indicesCount / 6) * 4;
+								break;
+							case MeshTopology.Triangle:
+								verticesCount = indicesCount;
+								break;
 						}
+						return indicesCount > 0;
 					}
 				}
 			}
@@ -107,35 +92,27 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			original = null;
 		}
 
-		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+		ReadOnlySpan<uint> IDrawableData.GetIndicesData()
 		{
 			if(topology == MeshTopology.Generic)
 			{
-				fixed(uint* ptr = indices)
-				{
-					context.Process(ptr);
-				}
+				return indices;
 			}
 			else
 			{
-				fixed(uint* ptr = culledIndices)
-				{
-					context.Process(ptr);
-				}
+				return culledIndices;
 			}
 		}
 
-		void IDrawableData.ProvideVertices(VerticesContext context)
+		ReadOnlySpan<byte> IDrawableData.GetVerticesData(int bufferIndex)
 		{
 			if(verticesCount == original.VerticesCount)
 			{
-				original.ProvideVertices(context);
+				return original.GetVerticesData(bufferIndex);
 			}
 			else
 			{
-				vertProcessorRef = context.GetProcessor();
-				original.ProvideVertices(new VerticesContext(verticesCullProcessor, context.BufferIndex));
-				vertProcessorRef = null;
+				return CullVertices(original.GetVerticesData(bufferIndex), original.GetVertexBufferMeta(bufferIndex).Stride);
 			}
 		}
 
@@ -157,44 +134,39 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			}
 		}
 
-		private unsafe void VerticesCullProcessor(void* data, int stride)
+		private unsafe ReadOnlySpan<byte> CullVertices(ReadOnlySpan<byte> data, int stride)
 		{
-			if(data == null) return;
+			if(data.IsEmpty) return default;
 			EnsureVerticesDataBuffer((int)verticesCount * stride);
-			fixed(byte* vPtr = culledVerticesData)
+			fixed(byte* dPtr = data)
 			{
-				fixed(uint* indPtr = indices)
+				fixed(byte* vPtr = culledVerticesData)
 				{
-					fixed(uint* cindPtr = culledIndices)
+					fixed(uint* indPtr = indices)
 					{
-						for(uint i = 0; i < indicesCount; i++)
+						fixed(uint* cindPtr = culledIndices)
 						{
-							Buffer.MemoryCopy((byte*)data + indPtr[i] * stride, vPtr + cindPtr[i] * stride, stride, stride);
+							for(uint i = 0; i < indicesCount; i++)
+							{
+								Buffer.MemoryCopy(dPtr + indPtr[i] * stride, vPtr + cindPtr[i] * (uint)stride, stride, stride);
+							}
 						}
 					}
 				}
-				vertProcessorRef(vPtr, stride);
 			}
+			return culledVerticesData;
 		}
 
-		private unsafe void VerticesProcessor(void* data, int stride)
+		private unsafe void CullIndices(ReadOnlySpan<byte> data, int stride)
 		{
-			if(data == null) return;
-			CullIndices((byte*)data + posDataOffset, (uint)stride);
-		}
-
-		private unsafe void IndicesProcessor(uint* indices)
-		{
-			if(indices == null) return;
-			hasIndices = true;
-
-			fixed(uint* ptr = this.indices)
+			if(data.IsEmpty) return;
+			fixed(byte* ptr = data)
 			{
-				Buffer.MemoryCopy(indices, ptr, indicesCount * 4, indicesCount * 4);
+				CullIndicesImpl(ptr + posDataOffset, (uint)stride);
 			}
 		}
 
-		private unsafe void CullIndices(byte* vertices, uint stride)
+		private unsafe void CullIndicesImpl(byte* vertices, uint stride)
 		{
 			FaceCullHelper helper = default;
 			helper.vertices = vertices;

@@ -37,10 +37,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 			private int currentVertBlock = 0;
 			private int currentIndBlock = 0;
 
-			private bool hasIndices = false;
 			private bool hasVertices = false;
-			private IndicesContext.ProcessorDelegate addIndicesCallback;
-			private VerticesContext.ProcessorDelegate addVerticesCallback;
 
 			private readonly Dictionary<int, int> componentsToMap = new Dictionary<int, int>();
 			private readonly RefList<VertexAttribute> tmpAttributes = new RefList<VertexAttribute>();
@@ -52,8 +49,6 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 			{
 				this.task = task;
 
-				addIndicesCallback = InsertIndices;
-				addVerticesCallback = ProcessVerties;
 				addMappedUniformsCallback = AddMappedUniforms;
 			}
 
@@ -479,12 +474,12 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 				currentVertCount = (int)data.VerticesCount;
 				currentIndCount = (int)data.IndicesCount;
+
+				var indData = data.GetIndicesData();
+				if(indData.IsEmpty) return;
+
 				EnsureCapacity();
-
-				hasIndices = false;
-				data.ProvideIndices(new IndicesContext(addIndicesCallback));
-
-				if(!hasIndices) return;
+				fixed(uint* indPtr = indData) InsertIndices(indPtr);
 
 				componentsToMap.Clear();
 				var map = builderVertexMaps[builderIndex];
@@ -502,7 +497,10 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 					tmpAttributes.Clear();
 					task.shader.MapDeclaration(meta.Declaration, tmpAttributes);
-					data.ProvideVertices(new VerticesContext(addVerticesCallback, i));
+
+					var vertData = data.GetVerticesData(i);
+					if(vertData.IsEmpty) continue;
+					fixed(byte* vertPtr = vertData) ProcessVerties(vertPtr, meta.Stride);
 				}
 
 				if(hasVertices)
@@ -619,9 +617,6 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 			private unsafe void InsertIndices(uint* indices)
 			{
-				if(indices == null) return;
-				hasIndices = true;
-
 				int countToCopy = currentIndCount;
 				uint indicesOffset = task.verticesCount;
 				int blockIndex = currentIndBlock;

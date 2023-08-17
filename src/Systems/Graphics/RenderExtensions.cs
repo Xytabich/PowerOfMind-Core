@@ -38,7 +38,7 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Uploads the mesh data to the GPU, returns a handle that can be used to update the data or free memory.
 		/// </summary>
-		/// <param name="initEmptyBuffer">Affects the behavior if <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer. If set to <see langword="false"/>, then the buffer will not be initialized. If <see langword="true"/>, memory will be allocated for the buffer without filling with data.</param>
+		/// <param name="initEmptyBuffer">Affects the behavior if <see cref="IDrawableData.GetVerticesData"/> provides an empty span. If set to <see langword="false"/>, then the buffer will not be initialized. If <see langword="true"/>, memory will be allocated for the buffer without filling with data.</param>
 		public static unsafe IDrawableHandle UploadDrawable(this IRenderAPI rapi, IDrawableData data, bool initEmptyBuffer = true)
 		{
 			int vBuffersCount = data.VertexBuffersCount;
@@ -60,25 +60,28 @@ namespace PowerOfMind.Graphics
 
 			GL.BindVertexArray(container.vao);
 
-			var attribPointers = new List<int>();
-			var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
-			uploadVerts.ignoreNull = !initEmptyBuffer;
-			for(int i = 0; i < vBuffersCount; i++)
+			try
 			{
-				var meta = data.GetVertexBufferMeta(i);
-				uploadVerts.isDynamic = meta.IsDynamic;
-				uploadVerts.bufferIndex = i;
-				data.ProvideVertices(new VerticesContext(uploadVerts.Process, i));
-				InitDeclaration(meta.Declaration, attribPointers);
+				var attribPointers = new List<int>();
+				uint vertCount = data.VerticesCount;
+				for(int i = 0; i < vBuffersCount; i++)
+				{
+					UploadVertBuffer(container, data, i, initEmptyBuffer, false, attribPointers);
+				}
+				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+				container.attribPointers = attribPointers.ToArray();
+
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+				UploadIndBuffer(container, data, initEmptyBuffer, false);
+				GL.BindVertexArray(0);
 			}
-			GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-
-			container.attribPointers = attribPointers.ToArray();
-
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, data.GetIndicesMeta().IsDynamic).Upload));
-
-			GL.BindVertexArray(0);
+			catch
+			{
+				GL.BindVertexArray(0);
+				container.Dispose();
+				throw;
+			}
 			return container;
 		}
 
@@ -88,6 +91,8 @@ namespace PowerOfMind.Graphics
 		public static IDrawableHandle CreateDrawableProxy(this IRenderAPI rapi, IDrawableHandle refHandle, IDrawableInfo info)
 		{
 			var refContainer = (RefContainer)refHandle;
+			if(refContainer.proxyFor != null) throw new ArgumentException("An original handle is required to create a proxy", nameof(refContainer));
+
 			var container = new RefContainer(refContainer);
 			container.indicesCount = info.IndicesCount;
 
@@ -131,6 +136,8 @@ namespace PowerOfMind.Graphics
 		public static void UpdateDrawableProxy(this IRenderAPI rapi, IDrawableHandle proxyHandle, IDrawableInfo info)
 		{
 			var container = (RefContainer)proxyHandle;
+			if(container.proxyFor == null) throw new ArgumentException("Handle is not a proxy", nameof(proxyHandle));
+
 			container.indicesCount = info.IndicesCount;
 
 			GL.BindVertexArray(container.vao);
@@ -163,114 +170,137 @@ namespace PowerOfMind.Graphics
 		/// <summary>
 		/// Resizes the data buffers for the given handle, this may be needed if the number of vertices or indexes has changed.
 		/// </summary>
-		/// <param name="initEmptyBuffer">Affects the behavior if <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer. If set to <see langword="false"/>, it will not modify the buffer. If <see langword="true"/>, memory will be allocated for the buffer without filling with data.</param>
+		/// <param name="initEmptyBuffer">Affects the behavior if <see cref="IDrawableData.GetVerticesData"/> provides an empty span. If set to <see langword="false"/>, it will not modify the buffer. If <see langword="true"/>, memory will be allocated for the buffer without filling with data.</param>
 		public static unsafe void ReuploadDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, bool updateVertexDeclaration = false, bool initEmptyBuffer = true)
 		{
 			var container = (RefContainer)handle;
+			if(container.proxyFor != null) throw new ArgumentException("Unable to update data with proxy, use original handle instead", nameof(handle));
+
 			container.indicesCount = data.IndicesCount;
 
-			int vBuffersCount = data.VertexBuffersCount;
-			if(updateVertexDeclaration)
+			try
 			{
-				GL.BindVertexArray(container.vao);
-
-				//Clear the previous state, nothing else needs to be changed as unused attributes won't be enabled at render time anyway
-				foreach(var loc in container.attribPointers)
+				int vBuffersCount = data.VertexBuffersCount;
+				if(updateVertexDeclaration)
 				{
-					GL.VertexAttribDivisor((uint)loc, 0);
+					GL.BindVertexArray(container.vao);
+
+					//Clear the previous state, nothing else needs to be changed as unused attributes won't be enabled at render time anyway
+					foreach(var loc in container.attribPointers)
+					{
+						GL.VertexAttribDivisor((uint)loc, 0);
+					}
+
+					var attribPointers = new List<int>();
+					for(int i = 0; i < vBuffersCount; i++)
+					{
+						UploadVertBuffer(container, data, i, initEmptyBuffer, true, attribPointers);
+					}
+					GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+
+					container.attribPointers = attribPointers.ToArray();
+					GL.BindVertexArray(0);
+				}
+				else
+				{
+					for(int i = 0; i < vBuffersCount; i++)
+					{
+						UploadVertBuffer(container, data, i, initEmptyBuffer, true, null);
+					}
+					GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
 				}
 
-				var attribPointers = new List<int>();
-				var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
-				uploadVerts.ignoreNull = !initEmptyBuffer;
-				for(int i = 0; i < vBuffersCount; i++)
-				{
-					var meta = data.GetVertexBufferMeta(i);
-					uploadVerts.isDynamic = meta.IsDynamic;
-					uploadVerts.bufferIndex = i;
-					data.ProvideVertices(new VerticesContext(uploadVerts.Process, i));
-					InitDeclaration(meta.Declaration, attribPointers);
-				}
-				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
-
-				container.attribPointers = attribPointers.ToArray();
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+				UploadIndBuffer(container, data, initEmptyBuffer, true);
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+			}
+			catch
+			{
 				GL.BindVertexArray(0);
-			}
-			else
-			{
-				var uploadVerts = new UploadVerticesProcessor(container, data.VerticesCount);
-				uploadVerts.ignoreNull = initEmptyBuffer;
-				for(int i = 0; i < vBuffersCount; i++)
-				{
-					var meta = data.GetVertexBufferMeta(i);
-					uploadVerts.isDynamic = meta.IsDynamic;
-					uploadVerts.bufferIndex = i;
-					data.ProvideVertices(new VerticesContext(uploadVerts.Process, i));
-				}
 				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				throw;
 			}
-
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-			data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, data.GetIndicesMeta().IsDynamic).Upload));
-			GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
 		}
 
 		/// <summary>
 		/// Updates the vertex and index data for the given handle.
-		/// If <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer, then the data will not be modified.
+		/// If <see cref="IDrawableData.GetVerticesData"/> provides an empty span, then the data will not be modified.
 		/// If the number of vertices or indexes has changed since <see cref="UploadDrawable"/>, use <see cref="ReuploadDrawable"/> instead.
 		/// </summary>
 		public static unsafe void UpdateDrawable(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data)
 		{
 			var container = (RefContainer)handle;
+			if(container.proxyFor != null) throw new ArgumentException("Unable to update data with proxy, use original handle instead", nameof(handle));
 
 			if(data.VerticesCount > 0)
 			{
-				int vBuffersCount = data.VertexBuffersCount;
-				var updateVerts = new UpdateVerticesProcessor(container, data.VerticesCount);
-				for(int i = 0; i < vBuffersCount; i++)
+				try
 				{
-					updateVerts.bufferIndex = i;
-					data.ProvideVertices(new VerticesContext(updateVerts.Process, i));
+					int vBuffersCount = data.VertexBuffersCount;
+					for(int i = 0; i < vBuffersCount; i++)
+					{
+						UpdateVertBuffer(container, data, i, 0);
+					}
 				}
-				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+				finally
+				{
+					GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+				}
 			}
 
 			if(data.IndicesCount > 0)
 			{
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container).Update));
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				try
+				{
+					GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+					UpdateIndBuffer(container, data, 0);
+				}
+				finally
+				{
+					GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				}
 			}
 		}
 
 		/// <summary>
 		/// Updates part of the data buffers.
-		/// If <see cref="IDrawableData.ProvideVertices"/> provides a <see langword="null"/> pointer, then the data will not be modified.
+		/// If <see cref="IDrawableData.GetVerticesData"/> provides an empty span, then the data will not be modified.
 		/// </summary>
 		/// <param name="indicesBufferOffset">From which buffer element to start the update</param>
 		/// <param name="verticesBufferOffsets">From which buffer element to start the update. Size must be at least <see cref="IDrawableInfo.VertexBuffersCount"/>.</param>
 		public static unsafe void UpdateDrawablePart(this IRenderAPI rapi, IDrawableHandle handle, IDrawableData data, int indicesBufferOffset, params int[] verticesBufferOffsets)
 		{
 			var container = (RefContainer)handle;
+			if(container.proxyFor != null) throw new ArgumentException("Unable to update data with proxy, use original handle instead", nameof(handle));
 
 			if(data.VerticesCount > 0)
 			{
-				int vBuffersCount = data.VertexBuffersCount;
-				var updateVerts = new UpdatePartialVerticesProcessor(container, data.VerticesCount, verticesBufferOffsets);
-				for(int i = 0; i < vBuffersCount; i++)
+				try
 				{
-					updateVerts.bufferIndex = i;
-					data.ProvideVertices(new VerticesContext(updateVerts.Process, i));
+					int vBuffersCount = data.VertexBuffersCount;
+					for(int i = 0; i < vBuffersCount; i++)
+					{
+						UpdateVertBuffer(container, data, i, (uint)verticesBufferOffsets[i]);
+					}
 				}
-				GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+				finally
+				{
+					GL.BindBuffer(BufferTarget.ArrayBuffer, 0);
+				}
 			}
 
 			if(data.IndicesCount > 0)
 			{
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
-				data.ProvideIndices(new IndicesContext(new IndicesProcessorImpl(container, (uint)indicesBufferOffset, data.IndicesCount).UpdatePartial));
-				GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				try
+				{
+					GL.BindBuffer(BufferTarget.ElementArrayBuffer, container.indexBuffer);
+					UpdateIndBuffer(container, data, (uint)indicesBufferOffset);
+				}
+				finally
+				{
+					GL.BindBuffer(BufferTarget.ElementArrayBuffer, 0);
+				}
 			}
 		}
 
@@ -378,7 +408,7 @@ namespace PowerOfMind.Graphics
 
 			var attribPointers = container.attribPointers;
 			int len = attribPointers.Length;
-			for(int i = 0; i < len; i++)
+			for(int i = 0; i < len; i++)//TODO: enable/disable attributes only when uploading/updating vao attributes
 			{
 				GL.EnableVertexAttribArray(attribPointers[i]);
 			}
@@ -388,6 +418,100 @@ namespace PowerOfMind.Graphics
 				GL.DisableVertexAttribArray(attribPointers[i]);
 			}
 			GL.BindVertexArray(0);
+		}
+
+		private static unsafe void UploadIndBuffer(RefContainer container, IDrawableData data, bool initEmptyBuffer, bool invalidateBuffer)
+		{
+			var indData = data.GetIndicesData();
+			if(indData.IsEmpty)
+			{
+				if(initEmptyBuffer)
+				{
+					GL.BufferData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * container.indicesCount), (IntPtr)null, data.GetIndicesMeta().IsDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				}
+				else if(invalidateBuffer)
+				{
+					GL.InvalidateBufferData(container.indexBuffer);
+				}
+			}
+			else
+			{
+				if((uint)indData.Length < container.indicesCount)
+				{
+					throw new Exception("The size of the index buffer must not be less than the indices count");
+				}
+				fixed(uint* ptr = indData)
+				{
+					GL.BufferData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * container.indicesCount), (IntPtr)ptr, data.GetIndicesMeta().IsDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				}
+			}
+		}
+
+		private static unsafe void UploadVertBuffer(RefContainer container, IDrawableData data, int buffIndex, bool initEmptyBuffer, bool invalidateBuffer, List<int> attribPointers)
+		{
+			var meta = data.GetVertexBufferMeta(buffIndex);
+			var buffData = data.GetVerticesData(buffIndex);
+			var vertCount = data.VerticesCount;
+			if(buffData.IsEmpty)
+			{
+				if(initEmptyBuffer)
+				{
+					GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[buffIndex]);
+					GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(vertCount * (uint)meta.Stride), (IntPtr)null, meta.IsDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				}
+				else if(invalidateBuffer)
+				{
+					GL.InvalidateBufferData(container.vertexBuffers[buffIndex]);
+				}
+			}
+			else
+			{
+				if((uint)meta.Stride * (uint)buffData.Length < vertCount)
+				{
+					throw new Exception("The size of the vertex buffer must not be less than the product of the vertices count and the stride");
+				}
+				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[buffIndex]);
+				fixed(byte* ptr = buffData)
+				{
+					GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(vertCount * (uint)meta.Stride), (IntPtr)ptr, meta.IsDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
+				}
+			}
+			if(attribPointers != null) InitDeclaration(meta.Declaration, attribPointers);
+		}
+
+		private static unsafe void UpdateVertBuffer(RefContainer container, IDrawableData data, int buffIndex, uint offset)
+		{
+			var buffData = data.GetVerticesData(buffIndex);
+			if(buffData.IsEmpty) return;
+
+			var meta = data.GetVertexBufferMeta(buffIndex);
+			var vertCount = data.VerticesCount;
+
+			if((uint)meta.Stride * (uint)buffData.Length < vertCount)
+			{
+				throw new Exception("The size of the vertex buffer must not be less than the product of the vertices count and the stride");
+			}
+
+			GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[buffIndex]);
+			fixed(byte* ptr = buffData)
+			{
+				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(offset * (uint)meta.Stride), (IntPtr)(vertCount * (uint)meta.Stride), (IntPtr)ptr);
+			}
+		}
+
+		private static unsafe void UpdateIndBuffer(RefContainer container, IDrawableData data, uint offset)
+		{
+			var buffData = data.GetIndicesData();
+			if(buffData.IsEmpty) return;
+
+			if((uint)buffData.Length < container.indicesCount)
+			{
+				throw new Exception("The size of the index buffer must not be less than the indices count");
+			}
+			fixed(uint* ptr = buffData)
+			{
+				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), (IntPtr)(4 * container.indicesCount), (IntPtr)ptr);
+			}
 		}
 
 		private static void InitDeclaration(VertexDeclaration declaration, ICollection<int> outLocations)
@@ -480,126 +604,6 @@ namespace PowerOfMind.Graphics
 
 					disposed = true;
 				}
-			}
-		}
-
-		private class UploadVerticesProcessor
-		{
-			public bool isDynamic;
-			public int bufferIndex;
-			public bool ignoreNull = false;
-			public readonly VerticesContext.ProcessorDelegate Process;
-
-			private readonly RefContainer container;
-			private readonly uint verticesCount;
-
-			public unsafe UploadVerticesProcessor(RefContainer container, uint verticesCount)
-			{
-				this.container = container;
-				this.verticesCount = verticesCount;
-				Process = ProcessImpl;
-			}
-
-			private unsafe void ProcessImpl(void* data, int stride)
-			{
-				if(ignoreNull && data == null) return;
-				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferData(BufferTarget.ArrayBuffer, (IntPtr)(verticesCount * (uint)stride), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
-			}
-		}
-
-		private class UpdateVerticesProcessor
-		{
-			public int bufferIndex;
-			public readonly VerticesContext.ProcessorDelegate Process;
-
-			private readonly RefContainer container;
-			private readonly uint verticesCount;
-
-			public unsafe UpdateVerticesProcessor(RefContainer container, uint verticesCount)
-			{
-				this.container = container;
-				this.verticesCount = verticesCount;
-				Process = ProcessImpl;
-			}
-
-			private unsafe void ProcessImpl(void* data, int stride)
-			{
-				if(data == null) return;
-				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)0, (IntPtr)(verticesCount * (uint)stride), (IntPtr)data);
-			}
-		}
-
-		private class UpdatePartialVerticesProcessor
-		{
-			public int bufferIndex;
-			public readonly VerticesContext.ProcessorDelegate Process;
-
-			private readonly RefContainer container;
-			private readonly uint verticesCount;
-			private readonly int[] offsets;
-
-			public unsafe UpdatePartialVerticesProcessor(RefContainer container, uint verticesCount, int[] offsets)
-			{
-				this.container = container;
-				this.verticesCount = verticesCount;
-				this.offsets = offsets;
-				Process = ProcessImpl;
-			}
-
-			private unsafe void ProcessImpl(void* data, int stride)
-			{
-				if(data == null) return;
-				GL.BindBuffer(BufferTarget.ArrayBuffer, container.vertexBuffers[bufferIndex]);
-				GL.BufferSubData(BufferTarget.ArrayBuffer, (IntPtr)(offsets[bufferIndex] * (uint)stride), (IntPtr)(verticesCount * (uint)stride), (IntPtr)data);
-			}
-		}
-
-		private class IndicesProcessorImpl
-		{
-			private readonly RefContainer container;
-			private readonly uint offset;
-			private readonly bool isDynamic;
-			private readonly uint indicesCount;
-
-			public IndicesProcessorImpl(RefContainer container)
-			{
-				this.container = container;
-				indicesCount = container.indicesCount;
-				offset = 0;
-			}
-
-			public IndicesProcessorImpl(RefContainer container, uint offset, uint indicesCount)
-			{
-				this.container = container;
-				this.indicesCount = indicesCount;
-				this.offset = offset;
-			}
-
-			public IndicesProcessorImpl(RefContainer container, bool isDynamic)
-			{
-				this.container = container;
-				this.isDynamic = isDynamic;
-				indicesCount = container.indicesCount;
-				offset = 0;
-			}
-
-			public unsafe void Upload(uint* data)
-			{
-				GL.BufferData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * indicesCount), (IntPtr)data, isDynamic ? BufferUsageHint.DynamicDraw : BufferUsageHint.StaticDraw);
-			}
-
-			public unsafe void Update(uint* data)
-			{
-				if(data == null) return;
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)0, (IntPtr)(4 * indicesCount), (IntPtr)data);
-			}
-
-			public unsafe void UpdatePartial(uint* data)
-			{
-				if(data == null) return;
-				GL.BufferSubData(BufferTarget.ElementArrayBuffer, (IntPtr)(4 * offset), (IntPtr)(4 * indicesCount), (IntPtr)data);
 			}
 		}
 	}

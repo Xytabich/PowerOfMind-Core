@@ -1,4 +1,6 @@
 ﻿using PowerOfMind.Graphics.Drawable;
+using System;
+using System.Runtime.InteropServices;
 using Vintagestory.API.Client;
 
 namespace PowerOfMind.Graphics
@@ -52,20 +54,16 @@ namespace PowerOfMind.Graphics
 			VertexDeclaration = vertexDeclaration;
 		}
 
-		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+		ReadOnlySpan<uint> IDrawableData.GetIndicesData()
 		{
-			fixed(int* ptr = Indices)
-			{
-				context.Process((uint*)ptr + IndicesOffset);
-			}
+			if(Indices == null) return default;
+			return MemoryMarshal.Cast<int, uint>(Indices.AsSpan(IndicesOffset, IndicesCount));
 		}
 
-		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+		ReadOnlySpan<byte> IDrawableData.GetVerticesData(int bufferIndex)
 		{
-			fixed(T* ptr = Vertices)
-			{
-				context.Process(ptr + VerticesOffset, sizeof(T));
-			}
+			if(Vertices == null) return default;
+			return MemoryMarshal.AsBytes(Vertices.AsSpan(VerticesOffset, VerticesCount));
 		}
 
 		IndicesMeta IDrawableInfo.GetIndicesMeta()
@@ -73,9 +71,9 @@ namespace PowerOfMind.Graphics
 			return new IndicesMeta(!IndicesStatic);
 		}
 
-		VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
+		unsafe VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 		{
-			return new VertexBufferMeta(VertexDeclaration, !VerticesStatic);
+			return new VertexBufferMeta(VertexDeclaration, sizeof(T), !VerticesStatic);
 		}
 	}
 
@@ -120,43 +118,23 @@ namespace PowerOfMind.Graphics
 			DynamicVertexDeclaration = dynamicVertices[0].GetDeclaration();
 		}
 
-		unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+		ReadOnlySpan<uint> IDrawableData.GetIndicesData()
 		{
-			fixed(int* ptr = Indices)
-			{
-				context.Process((uint*)ptr + IndicesOffset);
-			}
+			if(Indices == null) return default;
+			return MemoryMarshal.Cast<int, uint>(Indices.AsSpan(IndicesOffset, IndicesCount));
 		}
 
-		unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+		ReadOnlySpan<byte> IDrawableData.GetVerticesData(int bufferIndex)
 		{
-			if(context.BufferIndex == 0)
+			if(bufferIndex == 0)
 			{
-				if(StaticVertices == null)
-				{
-					context.Process(null, sizeof(TStatic));
-				}
-				else
-				{
-					fixed(TStatic* ptr = StaticVertices)
-					{
-						context.Process(ptr + VerticesOffset, sizeof(TStatic));
-					}
-				}
+				if(StaticVertices == null) return default;
+				return MemoryMarshal.AsBytes(StaticVertices.AsSpan(VerticesOffset, VerticesCount));
 			}
 			else
 			{
-				if(DynamicVertices == null)
-				{
-					context.Process(null, sizeof(TDynamic));
-				}
-				else
-				{
-					fixed(TDynamic* ptr = DynamicVertices)
-					{
-						context.Process(ptr + VerticesOffset, sizeof(TDynamic));
-					}
-				}
+				if(DynamicVertices == null) return default;
+				return MemoryMarshal.AsBytes(DynamicVertices.AsSpan(VerticesOffset, VerticesCount));
 			}
 		}
 
@@ -165,15 +143,15 @@ namespace PowerOfMind.Graphics
 			return new IndicesMeta(!IndicesStatic);
 		}
 
-		VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
+		unsafe VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 		{
 			if(index == 0)
 			{
-				return new VertexBufferMeta(StaticVertexDeclaration, false);
+				return new VertexBufferMeta(StaticVertexDeclaration, sizeof(TStatic), false);
 			}
 			else
 			{
-				return new VertexBufferMeta(DynamicVertexDeclaration, true);
+				return new VertexBufferMeta(DynamicVertexDeclaration, sizeof(TDynamic), true);
 			}
 		}
 	}

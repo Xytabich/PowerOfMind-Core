@@ -1,13 +1,13 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System;
 using Vintagestory.API.Client;
 
 namespace PowerOfMind.Graphics.Drawable
 {
 	public interface IDrawableData : IDrawableInfo
 	{
-		void ProvideIndices(IndicesContext context);
+		ReadOnlySpan<uint> GetIndicesData();
 
-		void ProvideVertices(VerticesContext context);
+		ReadOnlySpan<byte> GetVerticesData(int bufferIndex);
 	}
 
 	public interface IDrawableInfo
@@ -38,85 +38,14 @@ namespace PowerOfMind.Graphics.Drawable
 	public readonly struct VertexBufferMeta
 	{
 		public readonly VertexDeclaration Declaration;
+		public readonly int Stride;
 		public readonly bool IsDynamic;
 
-		public VertexBufferMeta(VertexDeclaration declaration, bool isDynamic)
+		public VertexBufferMeta(VertexDeclaration declaration, int stride, bool isDynamic)
 		{
 			Declaration = declaration;
+			Stride = stride;
 			IsDynamic = isDynamic;
-		}
-	}
-
-	public readonly ref struct IndicesContext
-	{
-		/// <summary>
-		/// Provide indices to the processor
-		/// </summary>
-		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
-		public unsafe delegate void ProcessorDelegate(uint* indices);
-
-		private readonly ProcessorDelegate processor;
-
-		public IndicesContext(ProcessorDelegate processor)
-		{
-			this.processor = processor;
-		}
-
-		/// <summary>
-		/// Provide indices to the processor
-		/// </summary>
-		/// <param name="indices">Pointer to indices, or null. If null is specified, no data will be copied</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process(uint* indices)
-		{
-			processor(indices);
-		}
-
-		/// <summary>
-		/// Returns a reference to the processor.
-		/// Be careful, the reference must be immediately set to null after use to avoid memory leaks.
-		/// </summary>
-		public ProcessorDelegate GetProcessor()
-		{
-			return processor;
-		}
-	}
-
-	public readonly ref struct VerticesContext
-	{
-		/// <summary>
-		/// Provide vertices data to the processor
-		/// </summary>
-		/// <param name="indices">Pointer to vertices data, or null. If null is specified, no data will be copied</param>
-		public unsafe delegate void ProcessorDelegate(void* indices, int stride);
-
-		public readonly int BufferIndex;
-
-		private readonly ProcessorDelegate processor;
-
-		public VerticesContext(ProcessorDelegate processor, int bufferIndex)
-		{
-			this.processor = processor;
-			BufferIndex = bufferIndex;
-		}
-
-		/// <summary>
-		/// Provide data to the processor
-		/// </summary>
-		/// <param name="data">Pointer to data, or null. If null is specified, no data will be copied</param>
-		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public unsafe void Process(void* data, int stride)
-		{
-			processor(data, stride);
-		}
-
-		/// <summary>
-		/// Returns a reference to the processor.
-		/// Be careful, the reference must be immediately set to null after use to avoid memory leaks.
-		/// </summary>
-		public ProcessorDelegate GetProcessor()
-		{
-			return processor;
 		}
 	}
 }

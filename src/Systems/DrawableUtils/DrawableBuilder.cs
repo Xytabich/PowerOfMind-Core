@@ -1,6 +1,8 @@
 ﻿using PowerOfMind.Graphics;
 using PowerOfMind.Graphics.Drawable;
+using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using Vintagestory.API.Client;
 
 namespace PowerOfMind.Systems.DrawableUtils
@@ -266,39 +268,21 @@ namespace PowerOfMind.Systems.DrawableUtils
 				return new IndicesMeta(false);
 			}
 
-			VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
+			unsafe VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 			{
-				return new VertexBufferMeta(vertexDeclaration, false);
+				return new VertexBufferMeta(vertexDeclaration, sizeof(TVertex), false);
 			}
 
-			unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+			ReadOnlySpan<uint> IDrawableData.GetIndicesData()
 			{
-				if(indices == null)
-				{
-					context.Process(null);
-				}
-				else
-				{
-					fixed(uint* ptr = indices)
-					{
-						context.Process(ptr);
-					}
-				}
+				if(indices == null) return default;
+				return indices;
 			}
 
-			unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+			ReadOnlySpan<byte> IDrawableData.GetVerticesData(int bufferIndex)
 			{
-				if(vertices == null)
-				{
-					context.Process(null, sizeof(TVertex));
-				}
-				else
-				{
-					fixed(TVertex* ptr = vertices)
-					{
-						context.Process(ptr, sizeof(TVertex));
-					}
-				}
+				if(vertices == null) return default;
+				return MemoryMarshal.AsBytes(vertices.AsSpan());
 			}
 		}
 	}

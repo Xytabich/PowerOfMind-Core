@@ -769,31 +769,16 @@ _fail:
 				indicesData = null;
 			}
 
-			unsafe void IDrawableData.ProvideIndices(IndicesContext context)
+			ReadOnlySpan<uint> IDrawableData.GetIndicesData()
 			{
-				if(indicesData == null) context.Process(null);
-				else
-				{
-					fixed(uint* ptr = indicesData)
-					{
-						context.Process(ptr);
-					}
-				}
+				if(indicesData == null) return default;
+				return indicesData;
 			}
 
-			unsafe void IDrawableData.ProvideVertices(VerticesContext context)
+			ReadOnlySpan<byte> IDrawableData.GetVerticesData(int bufferIndex)
 			{
-				if(verticesData == null)
-				{
-					context.Process((byte*)null, verticesStride);
-				}
-				else
-				{
-					fixed(byte* ptr = verticesData)
-					{
-						context.Process(ptr, verticesStride);
-					}
-				}
+				if(verticesData == null) return default;
+				return verticesData;
 			}
 
 			IndicesMeta IDrawableInfo.GetIndicesMeta()
@@ -803,7 +788,7 @@ _fail:
 
 			VertexBufferMeta IDrawableInfo.GetVertexBufferMeta(int index)
 			{
-				return new VertexBufferMeta(vertexDeclaration, false);
+				return new VertexBufferMeta(vertexDeclaration, verticesStride, false);
 			}
 		}
 	}

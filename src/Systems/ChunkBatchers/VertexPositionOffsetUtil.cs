@@ -13,22 +13,18 @@ namespace PowerOfMind.Systems.ChunkBatchers
 		uint IDrawableInfo.VerticesCount => verticesCount;
 		int IDrawableInfo.VertexBuffersCount => original.VertexBuffersCount;
 
-		private readonly VerticesContext.ProcessorDelegate Process;
-
 		private float3 offset;
 		private uint verticesCount;
 		private IDrawableData original;
 
 		private int posBufferIndex;
 		private uint posBufferOffset;
-		private VerticesContext.ProcessorDelegate targetProcessor;
 
 		private byte[] dataBuffer;
 
 		public unsafe VertexPositionOffsetUtil(int bufferCapacity = 1024)
 		{
 			dataBuffer = new byte[bufferCapacity];
-			Process = ProcessImpl;
 		}
 
 		public void Init(IDrawableData original, float3 offset)
@@ -59,37 +55,38 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			original = null;
 		}
 
-		void IDrawableData.ProvideIndices(IndicesContext context)
+		ReadOnlySpan<uint> IDrawableData.GetIndicesData()
 		{
-			original.ProvideIndices(context);
+			return original.GetIndicesData();
 		}
 
-		void IDrawableData.ProvideVertices(VerticesContext context)
+		ReadOnlySpan<byte> IDrawableData.GetVerticesData(int bufferIndex)
 		{
-			if(context.BufferIndex == posBufferIndex)
+			if(bufferIndex == posBufferIndex)
 			{
-				targetProcessor = context.GetProcessor();
-				original.ProvideVertices(new VerticesContext(Process, context.BufferIndex));
-				targetProcessor = null;
+				return ApplyOffset(original.GetVerticesData(bufferIndex), original.GetVertexBufferMeta(bufferIndex).Stride);
 			}
 			else
 			{
-				original.ProvideVertices(context);
+				return original.GetVerticesData(bufferIndex);
 			}
 		}
 
-		private unsafe void ProcessImpl(void* data, int stride)
+		private unsafe ReadOnlySpan<byte> ApplyOffset(ReadOnlySpan<byte> data, int stride)
 		{
+			if(data.IsEmpty) return default;
+
 			uint offset = posBufferOffset;
 			if((uint)dataBuffer.Length < verticesCount * (uint)stride)
 			{
 				dataBuffer = new byte[verticesCount * (uint)stride];
 			}
+
+			data.Slice(0, (int)verticesCount * stride).CopyTo(dataBuffer);
+
 			var posOffset = this.offset;
 			fixed(byte* ptr = dataBuffer)
 			{
-				Buffer.MemoryCopy(data, ptr, verticesCount * stride, verticesCount * stride);
-
 				byte* dPtr = ptr + offset;
 				for(int i = 0; i < verticesCount; i++)
 				{
@@ -97,9 +94,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 					dPtr += stride;
 				}
-
-				targetProcessor(ptr, stride);
 			}
+			return dataBuffer;
 		}
 
 		IndicesMeta IDrawableInfo.GetIndicesMeta()
