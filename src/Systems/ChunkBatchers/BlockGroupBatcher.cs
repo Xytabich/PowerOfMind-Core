@@ -143,12 +143,15 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 				blockLightUtil.Init(batcher.blockAccessor, null, CommonExt.CreateLightUtil(batcher.worldAccessor));//TODO: geometry util
 
-				foreach(var id in batcher.chunkGroups.GetNodeEnumerable(groupChain))
+				var groups = batcher.groups.AsReadonly();
+				var chunkGroups = batcher.chunkGroups.AsReadonly();
+				foreach(var id in chunkGroups.GetNodeEnumerable(groupChain))
 				{
-					ref readonly var record = ref batcher.chunkGroups[id];
-					if(batcher.groups.TryGet(record.groupId, out var group))
+					ref readonly var record = ref chunkGroups[id];
+					if(groups.TryGet(record.groupId, out var group))
 					{
-						group.builder?.BuildChunk(index, batcher.blockAccessor, blockLightUtil, context);
+						var builder = group.builder;
+						builder?.BuildChunk(index, batcher.blockAccessor, blockLightUtil, context);
 					}
 				}
 

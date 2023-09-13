@@ -250,7 +250,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				if(bitBlocks == null) bitBlocks = new uint[32][];
 				int bitCount = bitsDepth;
 				int bit = 0;
-				foreach(var id in batcher.bitChains.GetEnumerable(bitsChain))
+				var bitChains = batcher.bitChains.AsReadonly();
+				foreach(var id in bitChains.GetEnumerable(bitsChain))
 				{
 					if(id < batcher.bitBlocks.Count && bit < bitCount)
 					{
