@@ -36,7 +36,7 @@ namespace PowerOfMind.Collections
 			[MethodImpl(MethodImplOptions.AggressiveInlining)]
 			get
 			{
-				if(id == lastFreeIndex || indices[id] != -1)
+				if(id >= valuesCount || id == lastFreeIndex || indices[id] != -1)
 				{
 					throw new InvalidOperationException("Heap value reference is invalid");
 				}
@@ -99,14 +99,66 @@ namespace PowerOfMind.Collections
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool IsAllocated(int id)
 		{
-			return id != lastFreeIndex && indices[id] == -1;
+			return id < valuesCount && id != lastFreeIndex && indices[id] == -1;
 		}
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public bool TryGet(int id, out T value)
 		{
 			value = values[id];
-			return id != lastFreeIndex && indices[id] == -1;
+			return id < valuesCount && id != lastFreeIndex && indices[id] == -1;
+		}
+
+		public Readonly AsReadonly()
+		{
+			return new Readonly(this);
+		}
+
+		public readonly struct Readonly
+		{
+			private readonly int valuesCount;
+			private readonly int lastFreeIndex;
+			private readonly int[] indices;
+			private readonly T[] values;
+
+			public Readonly(HeapCollection<T> heapCollection)
+			{
+				valuesCount = heapCollection.valuesCount;
+				lastFreeIndex = heapCollection.lastFreeIndex;
+				indices = heapCollection.indices;
+				values = heapCollection.values;
+			}
+
+			public ref readonly T this[int id]
+			{
+				[MethodImpl(MethodImplOptions.AggressiveInlining)]
+				get
+				{
+					if(id >= valuesCount || id == lastFreeIndex || indices[id] != -1)
+					{
+						throw new InvalidOperationException("Heap value reference is invalid");
+					}
+					return ref values[id];
+				}
+			}
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public bool IsAllocated(int id)
+			{
+				return id < valuesCount && id != lastFreeIndex && indices[id] == -1;
+			}
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public bool TryGet(int id, out T value)
+			{
+				value = values[id];
+				return id < valuesCount && id != lastFreeIndex && indices[id] == -1;
+			}
+
+			public static implicit operator Readonly(HeapCollection<T> heapCollection)
+			{
+				return new Readonly(heapCollection);
+			}
 		}
 	}
 }

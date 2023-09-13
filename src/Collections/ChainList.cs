@@ -148,19 +148,24 @@ namespace PowerOfMind.Collections
 			return chain;
 		}
 
+		public Readonly AsReadonly()
+		{
+			return new Readonly(this);
+		}
+
 		public ChainEnumerable<RemoveChainEnumerator, T> RemoveEnumerated(int chain)
 		{
 			return new ChainEnumerable<RemoveChainEnumerator, T>(chain, this);
 		}
 
-		public ChainEnumerable<ChainEnumerator, T> GetEnumerable(int chain)
+		public ChainReadonlyEnumerable<ChainEnumerator, T> GetEnumerable(int chain)
 		{
-			return new ChainEnumerable<ChainEnumerator, T>(chain, this);
+			return new ChainReadonlyEnumerable<ChainEnumerator, T>(chain, new Readonly(this));
 		}
 
-		public ChainEnumerable<NodeEnumerator, int> GetNodeEnumerable(int chain)
+		public ChainReadonlyEnumerable<NodeEnumerator, int> GetNodeEnumerable(int chain)
 		{
-			return new ChainEnumerable<NodeEnumerator, int>(chain, this);
+			return new ChainReadonlyEnumerable<NodeEnumerator, int>(chain, new Readonly(this));
 		}
 
 		private int Allocate()
@@ -185,6 +190,58 @@ namespace PowerOfMind.Collections
 			public int prev;
 			public int next;
 			public T value;
+		}
+
+		public readonly struct Readonly
+		{
+			private readonly LinkedNode[] nodes;
+
+			public Readonly(ChainList<T> chainList)
+			{
+				nodes = chainList.nodes;
+			}
+
+			public ref readonly T this[int id] => ref nodes[id].value;
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public bool TryGetPrevId(int chain, int id, out int prevId)
+			{
+				if(chain == id)
+				{
+					prevId = default;
+					return false;
+				}
+
+				prevId = nodes[id].prev;
+				return true;
+			}
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public bool TryGetNextId(int chain, int id, out int nextId)
+			{
+				if(id < 0)
+				{
+					nextId = chain;
+					return chain >= 0;
+				}
+				nextId = nodes[id].next;
+				return nextId != chain;
+			}
+
+			public ChainReadonlyEnumerable<ChainEnumerator, T> GetEnumerable(int chain)
+			{
+				return new ChainReadonlyEnumerable<ChainEnumerator, T>(chain, this);
+			}
+
+			public ChainReadonlyEnumerable<NodeEnumerator, int> GetNodeEnumerable(int chain)
+			{
+				return new ChainReadonlyEnumerable<NodeEnumerator, int>(chain, this);
+			}
+
+			public static implicit operator Readonly(ChainList<T> chainList)
+			{
+				return new Readonly(chainList);
+			}
 		}
 
 		public readonly struct ChainEnumerable<TEnumerator, TValue> : IEnumerable<TValue> where TEnumerator : IEnumerator<TValue>, IChainEnumerator
@@ -216,24 +273,53 @@ namespace PowerOfMind.Collections
 			}
 		}
 
-		public struct ChainEnumerator : IEnumerator<T>, IChainEnumerator
+		public readonly struct ChainReadonlyEnumerable<TEnumerator, TValue> : IEnumerable<TValue> where TEnumerator : IEnumerator<TValue>, IChainReadonlyEnumerator
+		{
+			private readonly int chainId;
+			private readonly Readonly chainList;
+
+			public ChainReadonlyEnumerable(int chainId, Readonly chainList)
+			{
+				this.chainId = chainId;
+				this.chainList = chainList;
+			}
+
+			public TEnumerator GetEnumerator()
+			{
+				var e = default(TEnumerator);
+				e.Init(chainId, chainList);
+				return e;
+			}
+
+			IEnumerator IEnumerable.GetEnumerator()
+			{
+				return GetEnumerator();
+			}
+
+			IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
+			{
+				return GetEnumerator();
+			}
+		}
+
+		public struct ChainEnumerator : IEnumerator<T>, IChainReadonlyEnumerator
 		{
 			private int chainId;
-			private ChainList<T> chainList;
+			private Readonly chainList;
 
 			private int current;
 
 			public T Current => chainList[current];
 			object IEnumerator.Current => chainList[current];
 
-			public ChainEnumerator(int chainId, ChainList<T> chainList)
+			public ChainEnumerator(int chainId, Readonly chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
 				current = -1;
 			}
 
-			void IChainEnumerator.Init(int chainId, ChainList<T> chainList)
+			void IChainReadonlyEnumerator.Init(int chainId, Readonly chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
@@ -247,10 +333,13 @@ namespace PowerOfMind.Collections
 					current = chainId;
 					return chainId >= 0;
 				}
-				int next = chainList.nodes[current].next;
-				if(next == chainId) return false;
-				current = next;
-				return true;
+				int next;
+				if(chainList.TryGetNextId(chainId, current, out next))
+				{
+					current = next;
+					return true;
+				}
+				return false;
 			}
 
 			void IEnumerator.Reset()
@@ -263,24 +352,24 @@ namespace PowerOfMind.Collections
 			}
 		}
 
-		public struct NodeEnumerator : IEnumerator<int>, IChainEnumerator
+		public struct NodeEnumerator : IEnumerator<int>, IChainReadonlyEnumerator
 		{
 			private int chainId;
-			private ChainList<T> chainList;
+			private Readonly chainList;
 
 			private int current;
 
 			public int Current => current;
 			object IEnumerator.Current => current;
 
-			public NodeEnumerator(int chainId, ChainList<T> chainList)
+			public NodeEnumerator(int chainId, Readonly chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
 				current = -1;
 			}
 
-			void IChainEnumerator.Init(int chainId, ChainList<T> chainList)
+			void IChainReadonlyEnumerator.Init(int chainId, Readonly chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
@@ -294,10 +383,13 @@ namespace PowerOfMind.Collections
 					current = chainId;
 					return chainId >= 0;
 				}
-				int next = chainList.nodes[current].next;
-				if(next == chainId) return false;
-				current = next;
-				return true;
+				int next;
+				if(chainList.TryGetNextId(chainId, current, out next))
+				{
+					current = next;
+					return true;
+				}
+				return false;
 			}
 
 			void IEnumerator.Reset()
@@ -363,6 +455,11 @@ namespace PowerOfMind.Collections
 		public interface IChainEnumerator
 		{
 			void Init(int chainId, ChainList<T> chainList);
+		}
+
+		public interface IChainReadonlyEnumerator
+		{
+			void Init(int chainId, Readonly chainList);
 		}
 	}
 
@@ -484,14 +581,19 @@ namespace PowerOfMind.Collections
 			return chain;
 		}
 
-		public ChainEnumerable<RemoveChainEnumerator, int> RemoveEnumerated(int chain)
+		public Readonly AsReadonly()
 		{
-			return new ChainEnumerable<RemoveChainEnumerator, int>(chain, this);
+			return new Readonly(this);
 		}
 
-		public ChainEnumerable<NodeEnumerator, int> GetEnumerable(int chain)
+		public RemoveChainEnumerable RemoveEnumerated(int chain)
 		{
-			return new ChainEnumerable<NodeEnumerator, int>(chain, this);
+			return new RemoveChainEnumerable(chain, this);
+		}
+
+		public NodeEnumerable GetEnumerable(int chain)
+		{
+			return new NodeEnumerable(chain, new Readonly(this));
 		}
 
 		private int Allocate()
@@ -517,53 +619,116 @@ namespace PowerOfMind.Collections
 			public int next;
 		}
 
-		public readonly struct ChainEnumerable<TEnumerator, TValue> : IEnumerable<TValue> where TEnumerator : IEnumerator<TValue>, IChainEnumerator
+		public readonly struct Readonly
+		{
+			private readonly LinkedNode[] nodes;
+
+			public Readonly(ChainList chainList)
+			{
+				nodes = chainList.nodes;
+			}
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public bool TryGetPrevId(int chain, int id, out int prevId)
+			{
+				if(chain == id)
+				{
+					prevId = default;
+					return false;
+				}
+
+				prevId = nodes[id].prev;
+				return true;
+			}
+
+			[MethodImpl(MethodImplOptions.AggressiveInlining)]
+			public bool TryGetNextId(int chain, int id, out int nextId)
+			{
+				if(id < 0)
+				{
+					nextId = chain;
+					return chain >= 0;
+				}
+				nextId = nodes[id].next;
+				return nextId != chain;
+			}
+
+			public NodeEnumerable GetEnumerable(int chain)
+			{
+				return new NodeEnumerable(chain, this);
+			}
+
+			public static implicit operator Readonly(ChainList chainList)
+			{
+				return new Readonly(chainList);
+			}
+		}
+
+		public readonly struct NodeEnumerable : IEnumerable<int>
 		{
 			private readonly int chainId;
-			private readonly ChainList chainList;
+			private readonly Readonly chainList;
 
-			public ChainEnumerable(int chainId, ChainList chainList)
+			public NodeEnumerable(int chainId, Readonly chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
 			}
 
-			public TEnumerator GetEnumerator()
+			public NodeEnumerator GetEnumerator()
 			{
-				var e = default(TEnumerator);
-				e.Init(chainId, chainList);
-				return e;
+				return new NodeEnumerator(chainId, chainList);
 			}
 
 			IEnumerator IEnumerable.GetEnumerator()
 			{
-				return GetEnumerator();
+				return new NodeEnumerator(chainId, chainList);
 			}
 
-			IEnumerator<TValue> IEnumerable<TValue>.GetEnumerator()
+			IEnumerator<int> IEnumerable<int>.GetEnumerator()
 			{
-				return GetEnumerator();
+				return new NodeEnumerator(chainId, chainList);
 			}
 		}
 
-		public struct ChainEnumerator : IEnumerator<int>, IChainEnumerator
+		public readonly struct RemoveChainEnumerable : IEnumerable<int>
+		{
+			private readonly int chainId;
+			private readonly ChainList chainList;
+
+			public RemoveChainEnumerable(int chainId, ChainList chainList)
+			{
+				this.chainId = chainId;
+				this.chainList = chainList;
+			}
+
+			public RemoveChainEnumerator GetEnumerator()
+			{
+				return new RemoveChainEnumerator(chainId, chainList);
+			}
+
+			IEnumerator IEnumerable.GetEnumerator()
+			{
+				return new RemoveChainEnumerator(chainId, chainList);
+			}
+
+			IEnumerator<int> IEnumerable<int>.GetEnumerator()
+			{
+				return new RemoveChainEnumerator(chainId, chainList);
+			}
+		}
+
+		public struct NodeEnumerator : IEnumerator<int>
 		{
 			private int chainId;
-			private ChainList chainList;
+			private Readonly chainList;
 
 			private int current;
 
 			public int Current => current;
 			object IEnumerator.Current => current;
 
-			public ChainEnumerator(int chainId, ChainList chainList)
-			{
-				this.chainId = chainId;
-				this.chainList = chainList;
-				current = -1;
-			}
-
-			void IChainEnumerator.Init(int chainId, ChainList chainList)
+			public NodeEnumerator(int chainId, Readonly chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
@@ -577,57 +742,13 @@ namespace PowerOfMind.Collections
 					current = chainId;
 					return chainId >= 0;
 				}
-				int next = chainList.nodes[current].next;
-				if(next == chainId) return false;
-				current = next;
-				return true;
-			}
-
-			void IEnumerator.Reset()
-			{
-				current = -1;
-			}
-
-			void IDisposable.Dispose()
-			{
-			}
-		}
-
-		public struct NodeEnumerator : IEnumerator<int>, IChainEnumerator
-		{
-			private int chainId;
-			private ChainList chainList;
-
-			private int current;
-
-			public int Current => current;
-			object IEnumerator.Current => current;
-
-			public NodeEnumerator(int chainId, ChainList chainList)
-			{
-				this.chainId = chainId;
-				this.chainList = chainList;
-				current = -1;
-			}
-
-			void IChainEnumerator.Init(int chainId, ChainList chainList)
-			{
-				this.chainId = chainId;
-				this.chainList = chainList;
-				current = -1;
-			}
-
-			public bool MoveNext()
-			{
-				if(current < 0)
+				int next;
+				if(chainList.TryGetNextId(chainId, current, out next))
 				{
-					current = chainId;
-					return chainId >= 0;
+					current = next;
+					return true;
 				}
-				int next = chainList.nodes[current].next;
-				if(next == chainId) return false;
-				current = next;
-				return true;
+				return false;
 			}
 
 			void IEnumerator.Reset()
@@ -640,7 +761,7 @@ namespace PowerOfMind.Collections
 			}
 		}
 
-		public struct RemoveChainEnumerator : IEnumerator<int>, IChainEnumerator
+		public struct RemoveChainEnumerator : IEnumerator<int>
 		{
 			private int chainId;
 			private ChainList chainList;
@@ -651,13 +772,6 @@ namespace PowerOfMind.Collections
 			object IEnumerator.Current => current;
 
 			public RemoveChainEnumerator(int chainId, ChainList chainList)
-			{
-				this.chainId = chainId;
-				this.chainList = chainList;
-				current = -1;
-			}
-
-			void IChainEnumerator.Init(int chainId, ChainList chainList)
 			{
 				this.chainId = chainId;
 				this.chainList = chainList;
@@ -688,11 +802,6 @@ namespace PowerOfMind.Collections
 			void IDisposable.Dispose()
 			{
 			}
-		}
-
-		public interface IChainEnumerator
-		{
-			void Init(int chainId, ChainList chainList);
 		}
 	}
 
