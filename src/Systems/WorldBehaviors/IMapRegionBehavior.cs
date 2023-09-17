@@ -16,7 +16,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <summary>
 		/// Called when the map region has been unloaded.
 		/// </summary>
-		void OnUnload();
+		void OnUnloaded();
 
 		/// <summary>
 		/// Called when the map region data is starts saving.

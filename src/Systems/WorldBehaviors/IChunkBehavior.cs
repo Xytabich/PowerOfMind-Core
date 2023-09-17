@@ -16,8 +16,12 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <summary>
 		/// Called when the chunk has been unloaded.
 		/// </summary>
-		void OnUnload();
+		void OnUnloaded();
 
+		/// <summary>
+		/// Called when the state of a chunk changes.
+		/// Can be called on the client before <see cref="OnLoaded"/> if the chunk was loaded for the first time.
+		/// </summary>
 		void OnDirty(EnumChunkDirtyReason reason);
 
 		/// <summary>

@@ -253,7 +253,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 				mapRegions.Remove(id);
 				foreach(var beh in behaviors)
 				{
-					beh?.OnUnload();
+					beh?.OnUnloaded();
 				}
 				ArrayPool<IMapRegionBehavior>.Shared.Return(behaviors, true);
 			}
@@ -338,10 +338,11 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		{
 			if(chunkCoord.Y != 0) return;
 
-			var acc = api.World.BlockAccessor;
 			long id;
+			IBlockAccessor acc;
 			if(chunks != null)
 			{
+				acc = api.World.BlockAccessor;
 				int height = acc.MapSizeY;
 				int mcsx = acc.MapSizeX / acc.ChunkSize;
 				int mcsz = acc.MapSizeZ / acc.ChunkSize;
@@ -353,7 +354,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 						chunks.Remove(id);
 						foreach(var beh in behaviors)
 						{
-							beh?.OnUnload();
+							beh?.OnUnloaded();
 						}
 						ArrayPool<IChunkBehavior>.Shared.Return(behaviors, true);
 					}
@@ -362,13 +363,14 @@ namespace PowerOfMind.Systems.WorldBehaviors
 
 			if(mapChunks != null)
 			{
+				acc = api.World.BlockAccessor;
 				id = MapUtil.Index2dL(chunkCoord.X, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize);
 				if(mapChunks.TryGetValue(id, out var behaviors))
 				{
 					mapChunks.Remove(id);
 					foreach(var beh in behaviors)
 					{
-						beh?.OnUnload();
+						beh?.OnUnloaded();
 					}
 					ArrayPool<IMapChunkBehavior>.Shared.Return(behaviors, true);
 				}
@@ -377,12 +379,36 @@ namespace PowerOfMind.Systems.WorldBehaviors
 
 		private void OnChunkDirty(Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason)
 		{
-			if(chunks == null) return;
+			if(chunkBehaviors == null) return;
 
-			var acc = api.World.BlockAccessor;
-			var id = MapUtil.Index3dL(chunkCoord.X, chunkCoord.Y, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize, acc.MapSizeZ / acc.ChunkSize);
-			if(chunks.TryGetValue(id, out var behaviors))
+			ChunkDirtyImpl(api, chunkCoord, chunk, reason, chunkBehaviors, chunks);
+
+			static void ChunkDirtyImpl(ICoreAPI api, Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason,
+				List<ICtorContainer<IChunkBehavior>> chunkBehaviors, Dictionary<long, IChunkBehavior[]> chunks)
 			{
+				var acc = api.World.BlockAccessor;
+				var id = MapUtil.Index3dL(chunkCoord.X, chunkCoord.Y, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize, acc.MapSizeZ / acc.ChunkSize);
+				if(chunks == null || !chunks.TryGetValue(id, out var behaviors))
+				{
+					if(reason == EnumChunkDirtyReason.NewlyCreated || reason == EnumChunkDirtyReason.NewlyLoaded)//might be called before OnChunkLoaded
+					{
+						if(chunks == null) chunks = new();
+
+						var index = new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z);
+						behaviors = ArrayPool<IChunkBehavior>.Shared.Rent(chunkBehaviors.Count);
+						for(int i = 0; i < chunkBehaviors.Count; i++)
+						{
+							var beh = chunkBehaviors[i].Create();
+							behaviors[i].Initialize(api, id, index, chunk);
+							behaviors[i] = beh;
+						}
+						chunks[id] = behaviors;
+					}
+					else
+					{
+						return;
+					}
+				}
 				foreach(var beh in behaviors)
 				{
 					beh?.OnDirty(reason);
@@ -437,7 +463,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 					mapChunks.Remove(id);
 					foreach(var beh in behaviors)
 					{
-						beh?.OnUnload();
+						beh?.OnUnloaded();
 					}
 					ArrayPool<IMapChunkBehavior>.Shared.Return(behaviors, true);
 				}
@@ -452,7 +478,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 				{
 					foreach(var beh in pair.Value)
 					{
-						beh?.OnUnload();
+						beh?.OnUnloaded();
 					}
 					ArrayPool<IChunkBehavior>.Shared.Return(pair.Value, true);
 				}
@@ -465,7 +491,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 				{
 					foreach(var beh in pair.Value)
 					{
-						beh?.OnUnload();
+						beh?.OnUnloaded();
 					}
 					ArrayPool<IMapChunkBehavior>.Shared.Return(pair.Value, true);
 				}
@@ -482,7 +508,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 					chunks.Remove(id);
 					foreach(var beh in behaviors)
 					{
-						beh?.OnUnload();
+						beh?.OnUnloaded();
 					}
 					ArrayPool<IChunkBehavior>.Shared.Return(behaviors, true);
 				}

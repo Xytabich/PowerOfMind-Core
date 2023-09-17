@@ -16,7 +16,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <summary>
 		/// Called when the map chunk has been unloaded.
 		/// </summary>
-		void OnUnload();
+		void OnUnloaded();
 
 		/// <summary>
 		/// Called when the map chunk data is starts saving.
