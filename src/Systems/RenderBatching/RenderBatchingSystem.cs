@@ -1,5 +1,6 @@
 ﻿using HarmonyLib;
 using PowerOfMind.Graphics;
+using PowerOfMind.Utils;
 using System;
 using System.Collections.Generic;
 using System.Reflection;
@@ -14,23 +15,50 @@ namespace PowerOfMind.Systems.RenderBatching
 {
 	public class RenderBatchingSystem : ModSystem
 	{
+		private static int clientSystemIndex = -1;
+
 		public ChunkBatching ChunkBatcher { get; private set; }
 
 		private Dictionary<BatcherKey, object> batchers = null;
 		private Dictionary<int3, List<Action<int3>>> chunkDirtyListeners = null;
 		private Harmony harmony = null;
 
+		public override double ExecuteOrder()
+		{
+			return 1.1;
+		}
+
+		public override void Start(ICoreAPI api)
+		{
+			UpdateSystemIndex(api);
+		}
+
 		public override void StartClientSide(ICoreClientAPI api)
 		{
 			ChunkBatcher = new ChunkBatching(api, api.ModLoader.GetModSystem<GraphicsSystem>());
 
-			api.ObjectCache["powerofmind:renderbatchsystem"] = this;
+			UpdateSystemIndex(api);
 
 			harmony = new Harmony("powerofmind:renderbatch");
 			harmony.Patch(typeof(ClientWorldMap).GetMethod(nameof(ClientWorldMap.SetChunkDirty)),
 				new HarmonyMethod(typeof(RenderBatchingSystem).GetMethod(nameof(SetChunkDirtyPrefix), BindingFlags.NonPublic | BindingFlags.Static)));
 			harmony.Patch(typeof(ClientWorldMap).GetMethod(nameof(ClientWorldMap.MarkChunkDirty)),
 				new HarmonyMethod(typeof(RenderBatchingSystem).GetMethod(nameof(MarkChunkDirtyPrefix), BindingFlags.NonPublic | BindingFlags.Static)));
+		}
+
+		public override void StartPre(ICoreAPI api)
+		{
+			UpdateSystemIndex(api);
+		}
+
+		public override void AssetsLoaded(ICoreAPI api)
+		{
+			UpdateSystemIndex(api);
+		}
+
+		public override void AssetsFinalize(ICoreAPI api)
+		{
+			UpdateSystemIndex(api);
 		}
 
 		public override bool ShouldLoad(EnumAppSide forSide)
@@ -92,6 +120,11 @@ namespace PowerOfMind.Systems.RenderBatching
 			return inst;
 		}
 
+		private void UpdateSystemIndex(ICoreAPI api)
+		{
+			clientSystemIndex = CommonExt.GetModSystemIndex(api.ModLoader, this);
+		}
+
 		private void OnChunkDirty(int3 coord)
 		{
 			if(chunkDirtyListeners.TryGetValue(coord, out var callbacks))
@@ -108,9 +141,7 @@ namespace PowerOfMind.Systems.RenderBatching
 			int3 coord;
 			if(Thread.CurrentThread.ManagedThreadId == RuntimeEnv.MainThreadId)
 			{
-				var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
-				if(mod.chunkDirtyListeners == null) return;
-				if(mod.chunkDirtyListeners.Count > 0)
+				if(TryGetReadyMod(___game.Api, out var mod))
 				{
 					coord.x = (int)(index3d % __instance.chunkMapSizeXFast);
 					coord.y = (int)(index3d / ((long)__instance.chunkMapSizeXFast * (long)__instance.chunkMapSizeZFast));
@@ -126,9 +157,10 @@ namespace PowerOfMind.Systems.RenderBatching
 				coord.z = (int)(index3d / __instance.chunkMapSizeXFast % __instance.chunkMapSizeZFast);
 
 				___game.EnqueueMainThreadTask(() => {
-					var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
-					if(mod.chunkDirtyListeners == null) return;
-					if(mod.chunkDirtyListeners.Count > 0) mod.OnChunkDirty(coord);
+					if(TryGetReadyMod(___game.Api, out var mod))
+					{
+						mod.OnChunkDirty(coord);
+					}
 				}, "powerofmind:renderbatch-chunkdirty");
 			}
 		}
@@ -137,9 +169,7 @@ namespace PowerOfMind.Systems.RenderBatching
 		{
 			if(Thread.CurrentThread.ManagedThreadId == RuntimeEnv.MainThreadId)
 			{
-				var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
-				if(mod.chunkDirtyListeners == null) return;
-				if(mod.chunkDirtyListeners.Count > 0)
+				if(TryGetReadyMod(___game.Api, out var mod))
 				{
 					mod.OnChunkDirty(new int3(cx, cy, cz));
 				}
@@ -148,11 +178,24 @@ namespace PowerOfMind.Systems.RenderBatching
 			{
 				var coord = new int3(cx, cy, cz);
 				___game.EnqueueMainThreadTask(() => {
-					var mod = (RenderBatchingSystem)___game.Api.ObjectCache["powerofmind:renderbatchsystem"];
-					if(mod.chunkDirtyListeners == null) return;
-					if(mod.chunkDirtyListeners.Count > 0) mod.OnChunkDirty(coord);
+					if(TryGetReadyMod(___game.Api, out var mod))
+					{
+						mod.OnChunkDirty(coord);
+					}
 				}, "powerofmind:renderbatch-chunkdirty");
 			}
+		}
+
+		private static bool TryGetReadyMod(ICoreAPI api, out RenderBatchingSystem mod)
+		{
+			if(clientSystemIndex < 0)
+			{
+				mod = null;
+				return false;
+			}
+			mod = CommonExt.GetModSystemByIndex(api.ModLoader, clientSystemIndex) as RenderBatchingSystem;
+			if(mod == null) return false;
+			return mod.chunkDirtyListeners != null && mod.chunkDirtyListeners.Count > 0;
 		}
 
 		private readonly struct BatcherKey : IEquatable<BatcherKey>
