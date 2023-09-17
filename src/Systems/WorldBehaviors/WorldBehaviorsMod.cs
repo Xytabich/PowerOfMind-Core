@@ -16,7 +16,7 @@ using Vintagestory.Client.NoObf;
 
 namespace PowerOfMind.Systems.WorldBehaviors
 {
-	public class WorldBehaviorsMod : ModSystem
+	public partial class WorldBehaviorsMod : ModSystem
 	{
 		private const string PATCH_NAME = "powerofmind:worldbehaviors";
 
@@ -44,7 +44,8 @@ namespace PowerOfMind.Systems.WorldBehaviors
 					prefix: HarmonyExt.GetHarmonyMethod(() => ClientUnloadChunksDisposePrefix));
 				harmony.Patch(HarmonyExt.GetMethodInfo<SystemUnloadChunks>("HandleChunkUnload", BindingFlags.Instance),
 					transpiler: HarmonyExt.GetHarmonyMethod(() => ClientHandleChunkUnloadTranspiler));
-				//TODO: map chunks
+				harmony.Patch(HarmonyExt.GetMethodInfo<SystemNetworkProcess>("ProcessInBackground", BindingFlags.Instance),
+					postfix: HarmonyExt.GetHarmonyMethod(() => ClientProcessInBackgroundPostfix));
 			}
 			else
 			{
@@ -452,6 +453,41 @@ namespace PowerOfMind.Systems.WorldBehaviors
 			}
 		}
 
+		private void OnClientMapChunkLoaded(int2 chunkCoord)
+		{
+			if(mapChunkBehaviors == null) return;
+
+			ChunkMapLoadedImpl(api, chunkCoord, mapChunkBehaviors, mapChunks);
+
+			static void ChunkMapLoadedImpl(ICoreAPI api, int2 index,
+				List<ICtorContainer<IMapChunkBehavior>> mapChunkBehaviors, Dictionary<long, IMapChunkBehavior[]> mapChunks)
+			{
+				var acc = api.World.BlockAccessor;
+				var mapChunk = acc.GetMapChunk(index.x, index.y);
+				if(mapChunk == null) return;
+
+				var id = MapUtil.Index2dL(index.x, index.y, acc.MapSizeX / acc.ChunkSize);
+				if(mapChunks == null || !mapChunks.TryGetValue(id, out var behaviors))
+				{
+					if(mapChunks == null) mapChunks = new();
+
+					behaviors = ArrayPool<IMapChunkBehavior>.Shared.Rent(mapChunkBehaviors.Count);
+					for(int i = 0; i < mapChunkBehaviors.Count; i++)
+					{
+						var beh = mapChunkBehaviors[i].Create();
+						behaviors[i].Initialize(api, index, mapChunk);
+						behaviors[i] = beh;
+					}
+					mapChunks[id] = behaviors;
+				}
+
+				foreach(var beh in behaviors)
+				{
+					beh?.OnLoaded();
+				}
+			}
+		}
+
 		private void OnClientMapChunkUnload(Vec2i chunkCoord)
 		{
 			if(mapChunks != null)
@@ -513,111 +549,6 @@ namespace PowerOfMind.Systems.WorldBehaviors
 					ArrayPool<IChunkBehavior>.Shared.Return(behaviors, true);
 				}
 			}
-		}
-
-		private static void ClientUnloadChunksDisposePrefix(ClientMain game)
-		{
-			if(clientSystemIndex < 0) return;
-			if(CommonExt.GetModSystemByIndex(game.Api.ModLoader, clientSystemIndex) is WorldBehaviorsMod mod)
-			{
-				mod.OnClientChunksUnload();
-			}
-		}
-
-		private static void CallOnChunkUnloaded(ClientMain game, long id)
-		{
-			if(clientSystemIndex < 0) return;
-			if(CommonExt.GetModSystemByIndex(game.Api.ModLoader, clientSystemIndex) is WorldBehaviorsMod mod)
-			{
-				mod.OnClientChunkUnload(id);
-			}
-		}
-
-		private static void CallOnMapChunkUnloaded(ClientMain game, Vec2i coord)
-		{
-			if(clientSystemIndex < 0) return;
-			if(CommonExt.GetModSystemByIndex(game.Api.ModLoader, clientSystemIndex) is WorldBehaviorsMod mod)
-			{
-				mod.OnClientMapChunkUnload(coord);
-			}
-		}
-
-		private static IEnumerable<CodeInstruction> ClientHandleChunkUnloadTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
-		{
-			var chunksTryGetValue = SymbolExtensions.GetMethodInfo((Dictionary<long, ClientChunk> d, ClientChunk c) => d.TryGetValue(0, out c));
-			var removeMapChunk = SymbolExtensions.GetMethodInfo((Dictionary<long, ClientMapChunk> d) => d.Remove(0));
-			var unloadChunk = HarmonyExt.GetMethodInfo<SystemUnloadChunks>("UnloadChunk", BindingFlags.Instance);
-			var index3d = SymbolExtensions.GetMethodInfo(() => MapUtil.Index3dL);
-			var locals = original.GetMethodBody().LocalVariables;
-
-			LocalVariableInfo longLocal = null;
-			LocalVariableInfo enumeratorLocal = null;
-			var matcher = new CodeMatcher(instructions);
-			matcher.Start();
-			if(matcher.Match(
-					inst => inst.Calls(index3d),
-					inst => {
-						if(inst.TryGetLdloc(locals, typeof(long), out var local))
-						{
-							longLocal = local;
-							return true;
-						}
-						return false;
-					},
-					inst => inst.Calls(chunksTryGetValue),
-					inst => inst.Calls(unloadChunk),
-					inst => {
-						if(inst.IsLdloc(locals, typeof(HashSet<Vec2i>)))
-						{
-							return true;
-						}
-						return false;
-					},
-					inst => {
-						if(inst.TryGetLdloc(locals, typeof(HashSet<Vec2i>.Enumerator), out var local))
-						{
-							enumeratorLocal = local;
-							return true;
-						}
-						return false;
-					},
-					inst => inst.Calls(removeMapChunk)
-				))
-			{
-				matcher.SearchForward(inst => inst.Calls(unloadChunk));
-				matcher.Insert(
-					CodeInstruction.LoadArgument(0),
-					CodeInstruction.LoadField(typeof(SystemUnloadChunks), "game"),
-					CodeInstruction.LoadLocal(longLocal.LocalIndex),
-					CodeInstruction.Call(() => CallOnChunkUnloaded)
-				);
-				matcher.SearchForward(inst => {
-					if(inst.IsLdloc(locals, typeof(HashSet<Vec2i>)))
-					{
-						return true;
-					}
-					return false;
-				});
-				matcher.SearchForward(inst => {
-					if(inst.IsLdloc() && inst.operand is LocalBuilder local)
-					{
-						if(local.LocalType == typeof(HashSet<Vec2i>.Enumerator))
-						{
-							return true;
-						}
-					}
-					return false;
-				});
-				matcher.SearchForward(inst => inst.Calls(removeMapChunk));
-				matcher.Insert(
-					CodeInstruction.LoadArgument(0),
-					CodeInstruction.LoadField(typeof(SystemUnloadChunks), "game"),
-					CodeInstruction.LoadLocal(enumeratorLocal.LocalIndex, true),
-					CodeInstruction.Call(typeof(HashSet<Vec2i>.Enumerator), "get_Current"),
-					CodeInstruction.Call(() => CallOnMapChunkUnloaded)
-				);
-			}
-			return matcher.InstructionEnumeration();
 		}
 
 		private interface ICtorContainer<T>
