@@ -40,10 +40,10 @@ namespace PowerOfMind.Systems.RenderBatching
 			UpdateSystemIndex(api);
 
 			harmony = new Harmony("powerofmind:renderbatch");
-			harmony.Patch(typeof(ClientWorldMap).GetMethod(nameof(ClientWorldMap.SetChunkDirty)),
-				new HarmonyMethod(typeof(RenderBatchingSystem).GetMethod(nameof(SetChunkDirtyPrefix), BindingFlags.NonPublic | BindingFlags.Static)));
-			harmony.Patch(typeof(ClientWorldMap).GetMethod(nameof(ClientWorldMap.MarkChunkDirty)),
-				new HarmonyMethod(typeof(RenderBatchingSystem).GetMethod(nameof(MarkChunkDirtyPrefix), BindingFlags.NonPublic | BindingFlags.Static)));
+			harmony.Patch(HarmonyExt.GetMethodInfo<ClientWorldMap>(nameof(ClientWorldMap.SetChunkDirty), BindingFlags.Instance),
+				HarmonyExt.GetHarmonyMethod(() => SetChunkDirtyPrefix));
+			harmony.Patch(HarmonyExt.GetMethodInfo<ClientWorldMap>(nameof(ClientWorldMap.MarkChunkDirty), BindingFlags.Instance),
+				HarmonyExt.GetHarmonyMethod(() => MarkChunkDirtyPrefix));
 		}
 
 		public override void StartPre(ICoreAPI api)
