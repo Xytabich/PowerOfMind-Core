@@ -2,41 +2,48 @@
 using PowerOfMind.Utils;
 using System;
 using System.Buffers;
-using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
-using System.Reflection.Emit;
 using Unity.Mathematics;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
-using Vintagestory.Client;
 using Vintagestory.Client.NoObf;
+using Vintagestory.Common;
 
 namespace PowerOfMind.Systems.WorldBehaviors
 {
-	public partial class WorldBehaviorsMod : ModSystem
+	public partial class WorldBehaviorsMod : ModSystem, IShutDownMonitor
 	{
 		private const string PATCH_NAME = "powerofmind:worldbehaviors";
 
 		private static int clientSystemIndex = -1;
 		private static int serverSystemIndex = -1;
 
-		private List<ICtorContainer<IChunkBehavior>> chunkBehaviors = null;
-		private List<ICtorContainer<IMapChunkBehavior>> mapChunkBehaviors = null;
-		private List<ICtorContainer<IMapRegionBehavior>> mapRegionBehaviors = null;
+		bool IShutDownMonitor.ShuttingDown => sapi == null ? false : sapi.Server.IsShuttingDown;
 
-		private Dictionary<long, IChunkBehavior[]> chunks = null;//TODO: in offthread get using try-catch
-		private Dictionary<long, IMapChunkBehavior[]> mapChunks = null;
-		private Dictionary<long, IMapRegionBehavior[]> mapRegions = null;
+		private BehaviorContainer<IChunkBehavior, (long id, int3 index, IWorldChunk chunk)> chunks;
+		private BehaviorContainer<IMapChunkBehavior, (int2 index, IMapChunk chunk)> mapChunks;
+		private BehaviorContainer<IMapRegionBehavior, (int2 index, IMapRegion region)> mapRegions;
 
 		private ICoreAPI api;
+		private ICoreServerAPI sapi = null;
 		private Harmony harmony = null;
+
+		private WorldBehaviorsMod()
+		{
+			chunks = new(this, (beh, data) => beh.Initialize(api, data.id, data.index, data.chunk), beh => beh.OnUnloaded());
+			mapChunks = new(this, (beh, data) => beh.Initialize(api, data.index, data.chunk), beh => beh.OnUnloaded());
+			mapRegions = new(this, (beh, data) => beh.Initialize(api, data.index, data.region), beh => beh.OnUnloaded());
+		}
 
 		public override void Start(ICoreAPI api)
 		{
+			this.api = api;
+			sapi = api as ICoreServerAPI;
 			UpdateSystemIndex(api);
+
 			if(api.Side == EnumAppSide.Client)
 			{
 				harmony = new Harmony(PATCH_NAME);
@@ -55,7 +62,6 @@ namespace PowerOfMind.Systems.WorldBehaviors
 
 		public override void StartClientSide(ICoreClientAPI api)
 		{
-			this.api = api;
 			UpdateSystemIndex(api);
 
 			var evtManager = (ClientEventManager)typeof(ClientMain).GetField("eventManager", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public).GetValue(api.World);
@@ -67,7 +73,6 @@ namespace PowerOfMind.Systems.WorldBehaviors
 
 		public override void StartServerSide(ICoreServerAPI api)
 		{
-			this.api = api;
 			UpdateSystemIndex(api);
 
 			api.Event.ChunkColumnLoaded += OnChunkColumnLoaded;
@@ -99,8 +104,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>Id of behavior</returns>
 		public int RegisterChunkBehavior<T>() where T : class, IChunkBehavior, new()
 		{
-			(chunkBehaviors ??= new()).Add(new CtorContainer<T, IChunkBehavior>());
-			return chunkBehaviors.Count - 1;
+			return chunks.AddBehavior<T>();
 		}
 
 		/// <summary>
@@ -109,8 +113,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>Id of behavior</returns>
 		public int RegisterMapChunkBehavior<T>() where T : class, IMapChunkBehavior, new()
 		{
-			(mapChunkBehaviors ??= new()).Add(new CtorContainer<T, IMapChunkBehavior>());
-			return mapChunkBehaviors.Count - 1;
+			return mapChunks.AddBehavior<T>();
 		}
 
 		/// <summary>
@@ -119,8 +122,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>Id of behavior</returns>
 		public int RegisterMapRegionBehavior<T>() where T : class, IMapRegionBehavior, new()
 		{
-			(mapRegionBehaviors ??= new()).Add(new CtorContainer<T, IMapRegionBehavior>());
-			return mapRegionBehaviors.Count - 1;
+			return mapRegions.AddBehavior<T>();
 		}
 
 		/// <summary>
@@ -130,8 +132,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>List of behaviors or null if the chunk is not found or there are no behaviors for it</returns>
 		public IChunkBehavior[] GetChunkBehaviors(long index)
 		{
-			if(chunks != null && chunks.TryGetValue(index, out var behaviors)) return behaviors;
-			return null;
+			return chunks.TryGet(index, out var behaviors) ? behaviors : null;
 		}
 
 		/// <summary>
@@ -141,8 +142,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>List of behaviors or null if the map chunk is not found or there are no behaviors for it</returns>
 		public IMapChunkBehavior[] GetMapChunkBehaviors(long index)
 		{
-			if(mapChunks != null && mapChunks.TryGetValue(index, out var behaviors)) return behaviors;
-			return null;
+			return mapChunks.TryGet(index, out var behaviors) ? behaviors : null;
 		}
 
 		/// <summary>
@@ -152,8 +152,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>List of behaviors or null if the map region is not found or there are no behaviors for it</returns>
 		public IMapRegionBehavior[] GetMapRegionBehaviors(long index)
 		{
-			if(mapRegions != null && mapRegions.TryGetValue(index, out var behaviors)) return behaviors;
-			return null;
+			return mapRegions.TryGet(index, out var behaviors) ? behaviors : null;
 		}
 
 		/// <summary>
@@ -163,10 +162,10 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>List of behaviors or null if the chunk is not found or there are no behaviors for it</returns>
 		public IChunkBehavior[] GetChunkBehaviors(int3 index)
 		{
+			if(chunks.isEmpty) return null;
 			var acc = api.World.BlockAccessor;
 			var id = MapUtil.Index3dL(index.x, index.y, index.z, acc.MapSizeX / acc.ChunkSize, acc.MapSizeZ / acc.ChunkSize);
-			if(chunks != null && chunks.TryGetValue(id, out var behaviors)) return behaviors;
-			return null;
+			return GetChunkBehaviors(id);
 		}
 
 		/// <summary>
@@ -176,10 +175,10 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>List of behaviors or null if the map chunk is not found or there are no behaviors for it</returns>
 		public IMapChunkBehavior[] GetMapChunkBehaviors(int2 index)
 		{
+			if(mapChunks.isEmpty) return null;
 			var acc = api.World.BlockAccessor;
 			var id = MapUtil.Index2dL(index.x, index.y, acc.MapSizeX / acc.ChunkSize);
-			if(mapChunks != null && mapChunks.TryGetValue(id, out var behaviors)) return behaviors;
-			return null;
+			return GetMapChunkBehaviors(id);
 		}
 
 		/// <summary>
@@ -189,10 +188,10 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// <returns>List of behaviors or null if the map region is not found or there are no behaviors for it</returns>
 		public IMapRegionBehavior[] GetMapRegionBehaviors(int2 index)
 		{
+			if(mapRegions.isEmpty) return null;
 			var acc = api.World.BlockAccessor;
 			var id = MapUtil.Index2dL(index.x, index.y, acc.RegionMapSizeX);
-			if(mapRegions != null && mapRegions.TryGetValue(id, out var behaviors)) return behaviors;
-			return null;
+			return GetMapRegionBehaviors(id);
 		}
 
 		private void UpdateSystemIndex(ICoreAPI api)
@@ -209,33 +208,12 @@ namespace PowerOfMind.Systems.WorldBehaviors
 
 		private void OnRegionLoaded(Vec2i mapCoord, IMapRegion region)
 		{
-			if(mapRegionBehaviors == null) return;
+			if(mapRegions.noBehaviors) return;
 
-			RegionLoadedImpl(api, mapCoord, mapRegionBehaviors, mapRegions);
-
-			static void RegionLoadedImpl(ICoreAPI api, Vec2i mapCoord,
-				List<ICtorContainer<IMapRegionBehavior>> mapRegionBehaviors, Dictionary<long, IMapRegionBehavior[]> mapRegions)
+			var acc = api.World.BlockAccessor;
+			var id = MapUtil.Index2dL(mapCoord.X, mapCoord.Y, acc.RegionMapSizeX);
+			if(mapRegions.GetOrCreate(id, (new int2(mapCoord.X, mapCoord.Y), region), out var behaviors))
 			{
-				var acc = api.World.BlockAccessor;
-				var region = acc.GetMapRegion(mapCoord.X, mapCoord.Y);
-				if(region == null) return;
-
-				var id = MapUtil.Index2dL(mapCoord.X, mapCoord.Y, acc.RegionMapSizeX);
-				if(mapRegions == null || !mapRegions.TryGetValue(id, out var behaviors))
-				{
-					if(mapRegions == null) mapRegions = new();
-
-					var index = new int2(mapCoord.X, mapCoord.Y);
-					behaviors = ArrayPool<IMapRegionBehavior>.Shared.Rent(mapRegionBehaviors.Count);
-					for(int i = 0; i < mapRegionBehaviors.Count; i++)
-					{
-						var beh = mapRegionBehaviors[i].Create();
-						behaviors[i].Initialize(api, index, region);
-						behaviors[i] = beh;
-					}
-					mapRegions[id] = behaviors;
-				}
-
 				foreach(var beh in behaviors)
 				{
 					beh?.OnLoaded();
@@ -245,35 +223,27 @@ namespace PowerOfMind.Systems.WorldBehaviors
 
 		private void OnRegionUnloaded(Vec2i mapCoord, IMapRegion region)
 		{
-			if(mapRegions == null) return;
+			if(mapRegions.isEmpty) return;
 
 			var acc = api.World.BlockAccessor;
 			var id = MapUtil.Index2dL(mapCoord.X, mapCoord.Y, acc.RegionMapSizeX);
-			if(mapRegions.TryGetValue(id, out var behaviors))
-			{
-				mapRegions.Remove(id);
-				foreach(var beh in behaviors)
-				{
-					beh?.OnUnloaded();
-				}
-				ArrayPool<IMapRegionBehavior>.Shared.Return(behaviors, true);
-			}
+			mapRegions.RemoveDispose(id);
 		}
 
 		private void OnChunkColumnLoaded(Vec2i chunkCoord, IWorldChunk[] worldChunks)
 		{
-			if(chunkBehaviors != null)
+			if(chunks.hasBehaviors)
 			{
-				ChunkColumnLoadedImpl(api, chunkCoord, worldChunks, chunkBehaviors, chunks);
+				ChunkColumnLoadedImpl(api, chunkCoord, worldChunks, ref chunks);
 			}
 
-			if(mapChunkBehaviors != null)
+			if(mapChunks.hasBehaviors)
 			{
-				MapChunkLoadedImpl(api, chunkCoord, mapChunkBehaviors, mapChunks);
+				MapChunkLoadedImpl(api, chunkCoord, ref mapChunks);
 			}
 
 			static void ChunkColumnLoadedImpl(ICoreAPI api, Vec2i chunkCoord, IWorldChunk[] worldChunks,
-				List<ICtorContainer<IChunkBehavior>> chunkBehaviors, Dictionary<long, IChunkBehavior[]> chunks)
+				ref BehaviorContainer<IChunkBehavior, (long id, int3 index, IWorldChunk chunk)> chunks)
 			{
 				var acc = api.World.BlockAccessor;
 				int height = acc.MapSizeY;
@@ -284,53 +254,31 @@ namespace PowerOfMind.Systems.WorldBehaviors
 					var chunk = worldChunks[i];
 					if(chunk == null) continue;
 
-					long id = MapUtil.Index3dL(chunkCoord.X, i, chunkCoord.Y, mcsx, mcsz);
-					if(chunks == null || !chunks.TryGetValue(id, out var behaviors))
+					var id = MapUtil.Index3dL(chunkCoord.X, i, chunkCoord.Y, mcsx, mcsz);
+					if(chunks.GetOrCreate(id, (id, new int3(chunkCoord.X, i, chunkCoord.Y), chunk), out var behaviors))
 					{
-						if(chunks == null) chunks = new();
-
-						var index = new int3(chunkCoord.X, i, chunkCoord.Y);
-						behaviors = ArrayPool<IChunkBehavior>.Shared.Rent(chunkBehaviors.Count);
-						for(int j = 0; j < chunkBehaviors.Count; j++)
+						foreach(var beh in behaviors)
 						{
-							var beh = chunkBehaviors[j].Create();
-							behaviors[j].Initialize(api, id, index, chunk);
-							behaviors[j] = beh;
+							beh?.OnLoaded();
 						}
-						chunks[id] = behaviors;
-					}
-
-					foreach(var beh in behaviors)
-					{
-						beh?.OnLoaded();
 					}
 				}
 			}
 
-			static void MapChunkLoadedImpl(ICoreAPI api, Vec2i chunkCoord,
-				List<ICtorContainer<IMapChunkBehavior>> mapChunkBehaviors, Dictionary<long, IMapChunkBehavior[]> mapChunks)
+			static void MapChunkLoadedImpl(ICoreAPI api, Vec2i chunkCoord, ref BehaviorContainer<IMapChunkBehavior, (int2 index, IMapChunk chunk)> mapChunks)
 			{
 				var acc = api.World.BlockAccessor;
-				long id = MapUtil.Index2dL(chunkCoord.X, chunkCoord.Y, acc.MapSizeX / acc.ChunkSize);
-				if(mapChunks == null || !mapChunks.TryGetValue(id, out var behaviors))
-				{
-					if(mapChunks == null) mapChunks = new();
+				var id = MapUtil.Index2dL(chunkCoord.X, chunkCoord.Y, acc.MapSizeX / acc.ChunkSize);
 
-					var mapChunk = acc.GetMapChunk(chunkCoord);
-					var index = new int2(chunkCoord.X, chunkCoord.Y);
-					behaviors = ArrayPool<IMapChunkBehavior>.Shared.Rent(mapChunkBehaviors.Count);
-					for(int i = 0; i < mapChunkBehaviors.Count; i++)
+				var mapChunk = acc.GetMapChunk(chunkCoord);
+				if(mapChunk == null) return;
+
+				if(mapChunks.GetOrCreate(id, (new int2(chunkCoord.X, chunkCoord.Y), mapChunk), out var behaviors))
+				{
+					foreach(var beh in behaviors)
 					{
-						var beh = mapChunkBehaviors[i].Create();
-						behaviors[i].Initialize(api, index, mapChunk);
-						behaviors[i] = beh;
+						beh?.OnLoaded();
 					}
-					mapChunks[id] = behaviors;
-				}
-
-				foreach(var beh in behaviors)
-				{
-					beh?.OnLoaded();
 				}
 			}
 		}
@@ -339,216 +287,131 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		{
 			if(chunkCoord.Y != 0) return;
 
-			long id;
-			IBlockAccessor acc;
-			if(chunks != null)
+			if(!chunks.isEmpty)
 			{
-				acc = api.World.BlockAccessor;
+				ChunkUnloadImpl(api, chunkCoord, ref chunks);
+			}
+
+			if(!mapChunks.isEmpty)
+			{
+				var acc = api.World.BlockAccessor;
+				mapChunks.RemoveDispose(MapUtil.Index2dL(chunkCoord.X, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize));
+			}
+
+			static void ChunkUnloadImpl(ICoreAPI api, Vec3i chunkCoord, ref BehaviorContainer<IChunkBehavior, (long id, int3 index, IWorldChunk chunk)> chunks)
+			{
+				var acc = api.World.BlockAccessor;
 				int height = acc.MapSizeY;
 				int mcsx = acc.MapSizeX / acc.ChunkSize;
 				int mcsz = acc.MapSizeZ / acc.ChunkSize;
 				for(int i = 0; i < height; i++)
 				{
-					id = MapUtil.Index3dL(chunkCoord.X, i, chunkCoord.Z, mcsx, mcsz);
-					if(chunks.TryGetValue(id, out var behaviors))
-					{
-						chunks.Remove(id);
-						foreach(var beh in behaviors)
-						{
-							beh?.OnUnloaded();
-						}
-						ArrayPool<IChunkBehavior>.Shared.Return(behaviors, true);
-					}
-				}
-			}
-
-			if(mapChunks != null)
-			{
-				acc = api.World.BlockAccessor;
-				id = MapUtil.Index2dL(chunkCoord.X, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize);
-				if(mapChunks.TryGetValue(id, out var behaviors))
-				{
-					mapChunks.Remove(id);
-					foreach(var beh in behaviors)
-					{
-						beh?.OnUnloaded();
-					}
-					ArrayPool<IMapChunkBehavior>.Shared.Return(behaviors, true);
+					chunks.RemoveDispose(MapUtil.Index3dL(chunkCoord.X, i, chunkCoord.Z, mcsx, mcsz));
 				}
 			}
 		}
 
 		private void OnChunkDirty(Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason)
 		{
-			if(chunkBehaviors == null) return;
+			if(chunks.noBehaviors) return;
 
-			ChunkDirtyImpl(api, chunkCoord, chunk, reason, chunkBehaviors, chunks);
+			ChunkDirtyImpl(api, chunkCoord, chunk, reason, ref chunks);
 
 			static void ChunkDirtyImpl(ICoreAPI api, Vec3i chunkCoord, IWorldChunk chunk, EnumChunkDirtyReason reason,
-				List<ICtorContainer<IChunkBehavior>> chunkBehaviors, Dictionary<long, IChunkBehavior[]> chunks)
+				ref BehaviorContainer<IChunkBehavior, (long id, int3 index, IWorldChunk chunk)> chunks)
 			{
 				var acc = api.World.BlockAccessor;
 				var id = MapUtil.Index3dL(chunkCoord.X, chunkCoord.Y, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize, acc.MapSizeZ / acc.ChunkSize);
-				if(chunks == null || !chunks.TryGetValue(id, out var behaviors))
-				{
-					if(reason == EnumChunkDirtyReason.NewlyCreated || reason == EnumChunkDirtyReason.NewlyLoaded)//might be called before OnChunkLoaded
-					{
-						if(chunks == null) chunks = new();
 
-						var index = new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z);
-						behaviors = ArrayPool<IChunkBehavior>.Shared.Rent(chunkBehaviors.Count);
-						for(int i = 0; i < chunkBehaviors.Count; i++)
-						{
-							var beh = chunkBehaviors[i].Create();
-							behaviors[i].Initialize(api, id, index, chunk);
-							behaviors[i] = beh;
-						}
-						chunks[id] = behaviors;
-					}
-					else
+				IChunkBehavior[] behaviors;
+				if(reason == EnumChunkDirtyReason.NewlyCreated || reason == EnumChunkDirtyReason.NewlyLoaded)
+				{
+					if(chunks.GetOrCreate(id, (id, new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z), chunk), out behaviors))
 					{
-						return;
+						foreach(var beh in behaviors)
+						{
+							beh?.OnDirty(reason);
+						}
 					}
 				}
-				foreach(var beh in behaviors)
+				else
 				{
-					beh?.OnDirty(reason);
+					if(chunks.TryGet(id, out behaviors))
+					{
+						foreach(var beh in behaviors)
+						{
+							beh?.OnDirty(reason);
+						}
+					}
 				}
 			}
 		}
 
 		private void OnChunkLoaded(Vec3i chunkCoord)
 		{
-			if(chunkBehaviors == null) return;
+			if(chunks.noBehaviors) return;
 
-			ChunkLoadedImpl(api, chunkCoord, chunkBehaviors, chunks);
+			ChunkLoadedImpl(api, chunkCoord, ref chunks);
 
-			static void ChunkLoadedImpl(ICoreAPI api, Vec3i chunkCoord,
-				List<ICtorContainer<IChunkBehavior>> chunkBehaviors, Dictionary<long, IChunkBehavior[]> chunks)
+			static void ChunkLoadedImpl(ICoreAPI api, Vec3i chunkCoord, ref BehaviorContainer<IChunkBehavior, (long id, int3 index, IWorldChunk chunk)> chunks)
 			{
 				var acc = api.World.BlockAccessor;
 				var id = MapUtil.Index3dL(chunkCoord.X, chunkCoord.Y, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize, acc.MapSizeZ / acc.ChunkSize);
 				var chunk = acc.GetChunk(id);
 				if(chunk == null) return;
 
-				if(chunks == null || !chunks.TryGetValue(id, out var behaviors))
+				if(chunks.GetOrCreate(id, (id, new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z), chunk), out var behaviors))
 				{
-					if(chunks == null) chunks = new();
-
-					var index = new int3(chunkCoord.X, chunkCoord.Y, chunkCoord.Z);
-					behaviors = ArrayPool<IChunkBehavior>.Shared.Rent(chunkBehaviors.Count);
-					for(int i = 0; i < chunkBehaviors.Count; i++)
+					foreach(var beh in behaviors)
 					{
-						var beh = chunkBehaviors[i].Create();
-						behaviors[i].Initialize(api, id, index, chunk);
-						behaviors[i] = beh;
+						beh?.OnLoaded();
 					}
-					chunks[id] = behaviors;
-				}
-
-				foreach(var beh in behaviors)
-				{
-					beh?.OnLoaded();
 				}
 			}
 		}
 
 		private void OnClientMapChunkLoaded(int2 chunkCoord)
 		{
-			if(mapChunkBehaviors == null) return;
+			if(mapChunks.noBehaviors) return;
 
-			ChunkMapLoadedImpl(api, chunkCoord, mapChunkBehaviors, mapChunks);
+			ChunkMapLoadedImpl(api, chunkCoord, ref mapChunks);
 
-			static void ChunkMapLoadedImpl(ICoreAPI api, int2 index,
-				List<ICtorContainer<IMapChunkBehavior>> mapChunkBehaviors, Dictionary<long, IMapChunkBehavior[]> mapChunks)
+			static void ChunkMapLoadedImpl(ICoreAPI api, int2 index, ref BehaviorContainer<IMapChunkBehavior, (int2 index, IMapChunk chunk)> mapChunks)
 			{
 				var acc = api.World.BlockAccessor;
 				var mapChunk = acc.GetMapChunk(index.x, index.y);
 				if(mapChunk == null) return;
 
 				var id = MapUtil.Index2dL(index.x, index.y, acc.MapSizeX / acc.ChunkSize);
-				if(mapChunks == null || !mapChunks.TryGetValue(id, out var behaviors))
+				if(mapChunks.GetOrCreate(id, (new int2(index.x, index.y), mapChunk), out var behaviors))
 				{
-					if(mapChunks == null) mapChunks = new();
-
-					behaviors = ArrayPool<IMapChunkBehavior>.Shared.Rent(mapChunkBehaviors.Count);
-					for(int i = 0; i < mapChunkBehaviors.Count; i++)
+					foreach(var beh in behaviors)
 					{
-						var beh = mapChunkBehaviors[i].Create();
-						behaviors[i].Initialize(api, index, mapChunk);
-						behaviors[i] = beh;
+						beh?.OnLoaded();
 					}
-					mapChunks[id] = behaviors;
-				}
-
-				foreach(var beh in behaviors)
-				{
-					beh?.OnLoaded();
 				}
 			}
 		}
 
 		private void OnClientMapChunkUnload(Vec2i chunkCoord)
 		{
-			if(mapChunks != null)
+			if(!mapChunks.isEmpty)
 			{
 				var acc = api.World.BlockAccessor;
 				var id = MapUtil.Index2dL(chunkCoord.X, chunkCoord.Y, acc.MapSizeX / acc.ChunkSize);
-				if(mapChunks.TryGetValue(id, out var behaviors))
-				{
-					mapChunks.Remove(id);
-					foreach(var beh in behaviors)
-					{
-						beh?.OnUnloaded();
-					}
-					ArrayPool<IMapChunkBehavior>.Shared.Return(behaviors, true);
-				}
+				mapChunks.RemoveDispose(id);
 			}
 		}
 
 		private void OnClientChunksUnload()
 		{
-			if(chunks != null)
-			{
-				foreach(var pair in chunks)
-				{
-					foreach(var beh in pair.Value)
-					{
-						beh?.OnUnloaded();
-					}
-					ArrayPool<IChunkBehavior>.Shared.Return(pair.Value, true);
-				}
-				chunks = null;
-			}
-
-			if(mapChunks != null)
-			{
-				foreach(var pair in mapChunks)
-				{
-					foreach(var beh in pair.Value)
-					{
-						beh?.OnUnloaded();
-					}
-					ArrayPool<IMapChunkBehavior>.Shared.Return(pair.Value, true);
-				}
-				mapChunks = null;
-			}
+			chunks.Dispose();
+			mapChunks.Dispose();
 		}
 
 		private void OnClientChunkUnload(long id)
 		{
-			if(chunks != null)
-			{
-				if(chunks.TryGetValue(id, out var behaviors))
-				{
-					chunks.Remove(id);
-					foreach(var beh in behaviors)
-					{
-						beh?.OnUnloaded();
-					}
-					ArrayPool<IChunkBehavior>.Shared.Return(behaviors, true);
-				}
-			}
+			chunks.RemoveDispose(id);
 		}
 
 		private interface ICtorContainer<T>
@@ -561,6 +424,135 @@ namespace PowerOfMind.Systems.WorldBehaviors
 			TI ICtorContainer<TI>.Create()
 			{
 				return new T();
+			}
+		}
+
+		private struct BehaviorContainer<T, TInitData>
+		{
+			public FastRWLock locker;
+
+			public bool hasBehaviors => behaviors != null;
+			public bool noBehaviors => behaviors == null;
+
+			public bool isEmpty => instances == null;
+
+			private List<ICtorContainer<T>> behaviors;
+			private Dictionary<long, T[]> instances;
+
+			private readonly Action<T, TInitData> initializer;
+			private readonly Action<T> disposer;
+
+			public BehaviorContainer(WorldBehaviorsMod mod, Action<T, TInitData> initializer, Action<T> disposer)
+			{
+				this.initializer = initializer;
+				this.disposer = disposer;
+				locker = new FastRWLock(mod);
+
+				behaviors = null;
+				instances = null;
+			}
+
+			public int AddBehavior<TInstance>() where TInstance : class, T, new()
+			{
+				(behaviors ??= new()).Add(new CtorContainer<TInstance, T>());
+				return behaviors.Count - 1;
+			}
+
+			public bool GetOrCreate(long id, TInitData data, out T[] instanceBehaviors)
+			{
+				instanceBehaviors = null;
+
+				bool addNew = instances == null;
+				if(instances != null)
+				{
+					locker.AcquireReadLock();
+					if(locker.monitor.ShuttingDown) return false;
+					addNew = !instances.TryGetValue(id, out instanceBehaviors);
+					locker.ReleaseReadLock();
+				}
+
+				if(addNew)
+				{
+					if(instances == null)
+					{
+						locker.AcquireWriteLock();
+						if(locker.monitor.ShuttingDown) return false;
+						instances = new();
+						locker.ReleaseWriteLock();
+					}
+
+					instanceBehaviors = ArrayPool<T>.Shared.Rent(behaviors.Count);
+					for(int j = 0; j < behaviors.Count; j++)
+					{
+						var beh = behaviors[j].Create();
+						try
+						{
+							initializer(beh, data);
+							instanceBehaviors[j] = beh;
+						}
+						catch { }
+					}
+					locker.AcquireWriteLock();
+					if(locker.monitor.ShuttingDown) return false;
+					instances[id] = instanceBehaviors;
+					locker.ReleaseWriteLock();
+				}
+
+				return true;
+			}
+
+			public bool TryGet(long id, out T[] instanceBehaviors)
+			{
+				if(instances == null)
+				{
+					instanceBehaviors = null;
+					return false;
+				}
+
+				locker.AcquireReadLock();
+				bool isFound = instances.TryGetValue(id, out instanceBehaviors);
+				locker.ReleaseReadLock();
+
+				return isFound;
+			}
+
+			public void RemoveDispose(long id)
+			{
+				if(instances == null) return;
+
+				locker.AcquireReadLock();
+				bool isFound = instances.TryGetValue(id, out var instanceBehaviors);
+				locker.AcquireWriteLock();
+				if(isFound)
+				{
+					foreach(var beh in instanceBehaviors)
+					{
+						if(beh != null) disposer(beh);
+					}
+					ArrayPool<T>.Shared.Return(instanceBehaviors);
+				}
+
+				locker.AcquireWriteLock();
+				if(locker.monitor.ShuttingDown) return;
+				if(isFound) instances.Remove(id);
+				locker.ReleaseWriteLock();
+			}
+
+			public void Dispose()
+			{
+				if(instances == null) return;
+
+				locker.AcquireWriteLock();
+				foreach(var pair in instances)
+				{
+					foreach(var beh in pair.Value)
+					{
+						if(beh != null) disposer(beh);
+					}
+					ArrayPool<T>.Shared.Return(pair.Value);
+				}
+				instances = null;
+				locker.ReleaseWriteLock();
 			}
 		}
 	}
