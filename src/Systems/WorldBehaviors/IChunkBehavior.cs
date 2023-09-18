@@ -29,5 +29,15 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		/// Can be called outside the main thread.
 		/// </summary>
 		void OnSaving();
+
+		/// <summary>
+		/// Called when the player has started tracking a chunk (i.e. data has started to be sent).
+		/// </summary>
+		void OnStartTrackingByPlayer();
+
+		/// <summary>
+		/// Called when the player has stopped tracking a chunk (i.e. changes will no longer be sent).
+		/// </summary>
+		void OnEndTrackingByPlayer();
 	}
 }

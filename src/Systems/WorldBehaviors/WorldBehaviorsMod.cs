@@ -11,10 +11,11 @@ using Vintagestory.API.MathTools;
 using Vintagestory.API.Server;
 using Vintagestory.Client.NoObf;
 using Vintagestory.Common;
+using Vintagestory.Server;
 
 namespace PowerOfMind.Systems.WorldBehaviors
 {
-	public partial class WorldBehaviorsMod : ModSystem, IShutDownMonitor
+	public partial class WorldBehaviorsMod : ModSystem, IShutDownMonitor//TODO: database tables for storing data per each chunk/map/column and modid
 	{
 		private const string PATCH_NAME = "powerofmind:worldbehaviors";
 
@@ -44,9 +45,9 @@ namespace PowerOfMind.Systems.WorldBehaviors
 			sapi = api as ICoreServerAPI;
 			UpdateSystemIndex(api);
 
+			harmony = new Harmony(PATCH_NAME);
 			if(api.Side == EnumAppSide.Client)
 			{
-				harmony = new Harmony(PATCH_NAME);
 				harmony.Patch(SymbolExtensions.GetMethodInfo((SystemUnloadChunks s) => s.Dispose),
 					prefix: HarmonyExt.GetHarmonyMethod(() => ClientUnloadChunksDisposePrefix));
 				harmony.Patch(HarmonyExt.GetMethodInfo<SystemUnloadChunks>("HandleChunkUnload", BindingFlags.Instance),
@@ -56,7 +57,20 @@ namespace PowerOfMind.Systems.WorldBehaviors
 			}
 			else
 			{
+				var serverLoadAndSaveSystem = typeof(ServerSystem).Assembly.GetType("Vintagestory.Server.ServerSystemLoadAndSaveGame");
+				harmony.Patch(HarmonyExt.GetMethodInfo(serverLoadAndSaveSystem, "SaveAllDirtyLoadedChunks", BindingFlags.Instance),
+					transpiler: HarmonyExt.GetHarmonyMethod(() => ServerSaveChunksTranspiler));
+				harmony.Patch(HarmonyExt.GetMethodInfo(serverLoadAndSaveSystem, "SaveAllDirtyMapChunks", BindingFlags.Instance),
+					prefix: HarmonyExt.GetHarmonyMethod(() => ServerSaveMapChunksPrefix));
+				harmony.Patch(HarmonyExt.GetMethodInfo(serverLoadAndSaveSystem, "SaveAllDirtyMapRegions", BindingFlags.Instance),
+					prefix: HarmonyExt.GetHarmonyMethod(() => ServerSaveMapRegionsPrefix));
 
+				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.SetChunkSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerSetChunkSentPrefix));
+				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.SetMapChunkSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerSetMapChunkSentPrefix));
+				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.SetMapRegionSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerSetMapRegionSentPrefix));
+				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.RemoveChunkSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerRemoveChunkSentPrefix));
+				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.RemoveMapChunkSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerRemoveMapChunkSentPrefix));
+				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.RemoveMapRegionSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerRemoveMapRegionSentPrefix));
 			}
 		}
 

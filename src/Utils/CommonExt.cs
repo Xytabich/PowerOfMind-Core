@@ -25,10 +25,10 @@ namespace PowerOfMind.Utils
 				createLightUtil = Expression.Lambda<LightUtilCtor>(
 					Expression.New(typeof(ColorUtil.LightUtil).GetConstructor(BindingFlags.Instance | BindingFlags.Public, null,
 						new Type[] { typeof(float[]), typeof(float[]), typeof(byte[]), typeof(byte[]) }, null),
-						Expression.Field(clientWorldArg, typeof(ClientWorldMap).GetField("BlockLightLevels", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)),
-						Expression.Field(clientWorldArg, typeof(ClientWorldMap).GetField("SunLightLevels", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)),
-						Expression.Field(clientWorldArg, typeof(ClientWorldMap).GetField("hueLevels", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)),
-						Expression.Field(clientWorldArg, typeof(ClientWorldMap).GetField("satLevels", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public))
+						Expression.PropertyOrField(clientWorldArg, "BlockLightLevels"),
+						Expression.PropertyOrField(clientWorldArg, "SunLightLevels"),
+						Expression.PropertyOrField(clientWorldArg, "hueLevels"),
+						Expression.PropertyOrField(clientWorldArg, "satLevels")
 					),
 					clientWorldArg
 				).Compile();
@@ -41,8 +41,7 @@ namespace PowerOfMind.Utils
 				var returnLabel = Expression.Label(typeof(ModSystem));
 				getModSystemByIndex = Expression.Lambda<System.Func<IModLoader, int, ModSystem>>(
 					Expression.Block(typeof(ModSystem), new[] { systems },
-						Expression.Assign(systems, Expression.Field(Expression.Convert(modLoader, typeof(ModLoader)),
-								typeof(ModLoader).GetField("enabledSystems", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance))),
+						Expression.Assign(systems, Expression.Field(Expression.Convert(modLoader, typeof(ModLoader)), "enabledSystems")),
 						Expression.IfThen(Expression.GreaterThanOrEqual(index, Expression.Property(systems, "Count")),
 							Expression.Return(returnLabel, Expression.Constant(null, typeof(ModSystem)))),
 						Expression.Label(returnLabel, Expression.Property(systems, "Item", index))
