@@ -1,5 +1,6 @@
 ﻿using Unity.Mathematics;
 using Vintagestory.API.Common;
+using Vintagestory.API.Server;
 
 namespace PowerOfMind.Systems.WorldBehaviors
 {
@@ -25,19 +26,19 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		void OnDirty(EnumChunkDirtyReason reason);
 
 		/// <summary>
-		/// Called when the chunk data is starts saving.
+		/// Called when the chunk data is saved.
 		/// Can be called outside the main thread.
 		/// </summary>
-		void OnSaving();
+		void OnSaved();
 
 		/// <summary>
 		/// Called when the player has started tracking a chunk (i.e. data has started to be sent).
 		/// </summary>
-		void OnStartTrackingByPlayer();
+		void OnStartTrackingByPlayer(IServerPlayer player);
 
 		/// <summary>
 		/// Called when the player has stopped tracking a chunk (i.e. changes will no longer be sent).
 		/// </summary>
-		void OnEndTrackingByPlayer();
+		void OnEndTrackingByPlayer(IServerPlayer player);
 	}
 }

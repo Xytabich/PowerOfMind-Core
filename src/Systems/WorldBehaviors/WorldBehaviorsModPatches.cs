@@ -18,8 +18,6 @@ namespace PowerOfMind.Systems.WorldBehaviors
 {
 	public partial class WorldBehaviorsMod
 	{
-		private const BindingFlags InstanceFlags = BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Instance;
-
 		private static readonly Func<Packet_Server, int> GetPacketId;
 		private static readonly Func<ConnectedClient, IServerPlayer> GetPlayer;
 		private static readonly Func<ConnectedClient, ServerMain> GetServer;
@@ -150,46 +148,52 @@ namespace PowerOfMind.Systems.WorldBehaviors
 			return matcher.InstructionEnumeration();
 		}
 
-		private static void CallOnSaveDirtyChunk(ServerMain server, long chunkId)
+		private static void CallOnSaveDirtyChunks(ServerMain server, List<DbChunk> list)
 		{
-			if(serverSystemIndex < 0) return;
+			if(serverSystemIndex < 0 || list.Count == 0) return;
 			if(CommonExt.GetModSystemByIndex(server.Api.ModLoader, serverSystemIndex) is WorldBehaviorsMod mod)
 			{
-				mod.OnSaveDirtyChunk(chunkId);
+				foreach(var chunk in list)
+				{
+					mod.OnSaveDirtyChunk(chunk.Position);
+				}
+			}
+		}
+
+		private static void CallOnSaveDirtyMapChunks(ServerMain server, List<DbChunk> list)
+		{
+			if(serverSystemIndex < 0 || list.Count == 0) return;
+			if(CommonExt.GetModSystemByIndex(server.Api.ModLoader, serverSystemIndex) is WorldBehaviorsMod mod)
+			{
+				foreach(var chunk in list)
+				{
+					mod.OnSaveDirtyMapChunk(chunk.Position);
+				}
+			}
+		}
+
+		private static void CallOnSaveDirtyMapRegions(ServerMain server, List<DbChunk> list)
+		{
+			if(serverSystemIndex < 0 || list.Count == 0) return;
+			if(CommonExt.GetModSystemByIndex(server.Api.ModLoader, serverSystemIndex) is WorldBehaviorsMod mod)
+			{
+				foreach(var chunk in list)
+				{
+					mod.OnSaveDirtyMapRegion(chunk.Position);
+				}
 			}
 		}
 
 		private static IEnumerable<CodeInstruction> ServerSaveChunksTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
 		{
 			var setChunksDb = SymbolExtensions.GetMethodInfo((GameDatabase db) => db.SetChunks);
-			var addChunk = SymbolExtensions.GetMethodInfo((List<DbChunk> l) => l.Add);
-			var toBytes = SymbolExtensions.GetMethodInfo((ServerChunk c) => c.ToBytes);
 			var locals = original.GetMethodBody().LocalVariables;
 
 			LocalVariableInfo listLocal = null;
-			LocalVariableInfo pairLocal = null;
 
 			var matcher = new CodeMatcher(instructions);
 			matcher.End();
 			if(matcher.MatchRelaxed(
-					inst => inst.IsLdloc(locals, typeof(Dictionary<long, ServerChunk>.Enumerator)),
-					inst => {
-						if(inst.TryGetLdloc(locals, typeof(KeyValuePair<long, ServerChunk>), out var local))
-						{
-							pairLocal = local;
-							return true;
-						}
-						return false;
-					},
-					inst => inst.Calls(toBytes),
-					inst => {
-						if(inst.TryGetLdloc(locals, typeof(List<DbChunk>), out var local))
-						{
-							return listLocal != null && listLocal.LocalIndex == local.LocalIndex;//this is possible because MatchRelaxed works in reverse order
-						}
-						return false;
-					},
-					inst => inst.Calls(setChunksDb),
 					inst => {
 						if(inst.TryGetLdloc(locals, typeof(List<DbChunk>), out var local))
 						{
@@ -201,47 +205,85 @@ namespace PowerOfMind.Systems.WorldBehaviors
 					inst => inst.Calls(setChunksDb)
 				))
 			{
-				matcher.SearchForward(inst => inst.Calls(toBytes));
-				//Insert before calling ToBytes if it is necessary to change the data of an existing byte array in moddata (not add or set! as there may be a race)
+				matcher.SearchForward(inst => inst.IsLdloc(locals, typeof(List<DbChunk>)));
+				matcher.SearchForward(inst => inst.Calls(setChunksDb));
+				matcher.Advance(1);
 				matcher.Insert(
 					CodeInstruction.LoadArgument(0),
-					CodeInstruction.LoadField(typeof(SystemUnloadChunks), "server"),
-					CodeInstruction.LoadLocal(pairLocal.LocalIndex, true),
-					CodeInstruction.Call(typeof(KeyValuePair<long, ServerChunk>), "get_Key"),
-					CodeInstruction.Call(() => CallOnSaveDirtyChunk)
+					CodeInstruction.LoadField(typeof(ServerSystem), "server"),
+					CodeInstruction.LoadLocal(listLocal.LocalIndex),
+					CodeInstruction.Call(() => CallOnSaveDirtyChunks)
 				);
 			}
 			return matcher.InstructionEnumeration();
 		}
 
-		private static void ServerSaveMapChunksPrefix(ServerMain ___server)
+		private static IEnumerable<CodeInstruction> ServerSaveMapChunksTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
 		{
-			if(serverSystemIndex < 0) return;
-			if(CommonExt.GetModSystemByIndex(___server.Api.ModLoader, serverSystemIndex) is WorldBehaviorsMod mod)
+			var setChunksDb = SymbolExtensions.GetMethodInfo((GameDatabase db) => db.SetMapChunks);
+			var locals = original.GetMethodBody().LocalVariables;
+
+			LocalVariableInfo listLocal = null;
+
+			var matcher = new CodeMatcher(instructions);
+			matcher.End();
+			if(matcher.MatchRelaxed(
+					inst => {
+						if(inst.TryGetLdloc(locals, typeof(List<DbChunk>), out var local))
+						{
+							listLocal = local;
+							return true;
+						}
+						return false;
+					},
+					inst => inst.Calls(setChunksDb)
+				))
 			{
-				foreach(var pair in GetMapChunks(___server))//not as good as getting the value using a transpiler, but better than injection
-				{
-					if(pair.Value.DirtyForSaving)
-					{
-						mod.OnSaveDirtyMapChunk(pair);
-					}
-				}
+				matcher.SearchForward(inst => inst.IsLdloc(locals, typeof(List<DbChunk>)));
+				matcher.SearchForward(inst => inst.Calls(setChunksDb));
+				matcher.Advance(1);
+				matcher.Insert(
+					CodeInstruction.LoadArgument(0),
+					CodeInstruction.LoadField(typeof(ServerSystem), "server"),
+					CodeInstruction.LoadLocal(listLocal.LocalIndex),
+					CodeInstruction.Call(() => CallOnSaveDirtyMapChunks)
+				);
 			}
+			return matcher.InstructionEnumeration();
 		}
 
-		private static void ServerSaveMapRegionsPrefix(ServerMain ___server)
+		private static IEnumerable<CodeInstruction> ServerSaveMapRegionsTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
 		{
-			if(serverSystemIndex < 0) return;
-			if(CommonExt.GetModSystemByIndex(___server.Api.ModLoader, serverSystemIndex) is WorldBehaviorsMod mod)
+			var setChunksDb = SymbolExtensions.GetMethodInfo((GameDatabase db) => db.SetMapRegions);
+			var locals = original.GetMethodBody().LocalVariables;
+
+			LocalVariableInfo listLocal = null;
+
+			var matcher = new CodeMatcher(instructions);
+			matcher.End();
+			if(matcher.MatchRelaxed(
+					inst => {
+						if(inst.TryGetLdloc(locals, typeof(List<DbChunk>), out var local))
+						{
+							listLocal = local;
+							return true;
+						}
+						return false;
+					},
+					inst => inst.Calls(setChunksDb)
+				))
 			{
-				foreach(var pair in GetMapRegions(___server))//not as good as getting the value using a transpiler, but better than injection
-				{
-					if(pair.Value.DirtyForSaving)
-					{
-						mod.OnSaveDirtyMapRegion(pair);
-					}
-				}
+				matcher.SearchForward(inst => inst.IsLdloc(locals, typeof(List<DbChunk>)));
+				matcher.SearchForward(inst => inst.Calls(setChunksDb));
+				matcher.Advance(1);
+				matcher.Insert(
+					CodeInstruction.LoadArgument(0),
+					CodeInstruction.LoadField(typeof(ServerSystem), "server"),
+					CodeInstruction.LoadLocal(listLocal.LocalIndex),
+					CodeInstruction.Call(() => CallOnSaveDirtyMapRegions)
+				);
 			}
+			return matcher.InstructionEnumeration();
 		}
 
 		private static void ServerSetChunkSentPrefix(long index3d, ConnectedClient __instance)

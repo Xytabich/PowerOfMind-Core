@@ -32,7 +32,7 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		private ICoreServerAPI sapi = null;
 		private Harmony harmony = null;
 
-		private WorldBehaviorsMod()
+		public WorldBehaviorsMod()
 		{
 			chunks = new(this, (beh, data) => beh.Initialize(api, data.id, data.index, data.chunk), beh => beh.OnUnloaded());
 			mapChunks = new(this, (beh, data) => beh.Initialize(api, data.index, data.chunk), beh => beh.OnUnloaded());
@@ -61,9 +61,9 @@ namespace PowerOfMind.Systems.WorldBehaviors
 				harmony.Patch(HarmonyExt.GetMethodInfo(serverLoadAndSaveSystem, "SaveAllDirtyLoadedChunks", BindingFlags.Instance),
 					transpiler: HarmonyExt.GetHarmonyMethod(() => ServerSaveChunksTranspiler));
 				harmony.Patch(HarmonyExt.GetMethodInfo(serverLoadAndSaveSystem, "SaveAllDirtyMapChunks", BindingFlags.Instance),
-					prefix: HarmonyExt.GetHarmonyMethod(() => ServerSaveMapChunksPrefix));
+					transpiler: HarmonyExt.GetHarmonyMethod(() => ServerSaveMapChunksTranspiler));
 				harmony.Patch(HarmonyExt.GetMethodInfo(serverLoadAndSaveSystem, "SaveAllDirtyMapRegions", BindingFlags.Instance),
-					prefix: HarmonyExt.GetHarmonyMethod(() => ServerSaveMapRegionsPrefix));
+					transpiler: HarmonyExt.GetHarmonyMethod(() => ServerSaveMapRegionsTranspiler));
 
 				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.SetChunkSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerSetChunkSentPrefix));
 				harmony.Patch(SymbolExtensions.GetMethodInfo((ConnectedClient c) => c.SetMapChunkSent), prefix: HarmonyExt.GetHarmonyMethod(() => ServerSetMapChunkSentPrefix));
@@ -426,6 +426,138 @@ namespace PowerOfMind.Systems.WorldBehaviors
 		private void OnClientChunkUnload(long id)
 		{
 			chunks.RemoveDispose(id);
+		}
+
+		private void OnSaveDirtyChunk(Vec3i chunkCoord)
+		{
+			if(chunks.isEmpty) return;
+
+			SaveChunkImpl(api, chunkCoord, ref chunks);
+
+			static void SaveChunkImpl(ICoreAPI api, Vec3i chunkCoord, ref BehaviorContainer<IChunkBehavior, (long id, int3 index, IWorldChunk chunk)> chunks)
+			{
+				var acc = api.World.BlockAccessor;
+				var id = MapUtil.Index3dL(chunkCoord.X, chunkCoord.Y, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize, acc.MapSizeZ / acc.ChunkSize);
+				if(chunks.TryGet(id, out var behaviors))
+				{
+					foreach(var beh in behaviors)
+					{
+						beh?.OnSaved();
+					}
+				}
+			}
+		}
+
+		private void OnSaveDirtyMapChunk(Vec3i chunkCoord)
+		{
+			if(mapChunks.isEmpty) return;
+
+			SaveMapChunkImpl(api, chunkCoord, ref mapChunks);
+
+			static void SaveMapChunkImpl(ICoreAPI api, Vec3i chunkCoord, ref BehaviorContainer<IMapChunkBehavior, (int2 index, IMapChunk chunk)> mapChunks)
+			{
+				var acc = api.World.BlockAccessor;
+				var id = MapUtil.Index2dL(chunkCoord.X, chunkCoord.Z, acc.MapSizeX / acc.ChunkSize);
+				if(mapChunks.TryGet(id, out var behaviors))
+				{
+					foreach(var beh in behaviors)
+					{
+						beh?.OnSaved();
+					}
+				}
+			}
+		}
+
+		private void OnSaveDirtyMapRegion(Vec3i mapCoord)
+		{
+			if(mapRegions.isEmpty) return;
+
+			SaveMapChunkImpl(api, mapCoord, ref mapRegions);
+
+			static void SaveMapChunkImpl(ICoreAPI api, Vec3i mapCoord, ref BehaviorContainer<IMapRegionBehavior, (int2 index, IMapRegion region)> mapRegions)
+			{
+				var acc = api.World.BlockAccessor;
+				var id = MapUtil.Index2dL(mapCoord.X, mapCoord.Z, acc.RegionMapSizeX);
+				if(mapRegions.TryGet(id, out var behaviors))
+				{
+					foreach(var beh in behaviors)
+					{
+						beh?.OnSaved();
+					}
+				}
+			}
+		}
+
+		private void OnServerTrackChunk(IServerPlayer player, long id)
+		{
+			if(chunks.isEmpty) return;
+			if(chunks.TryGet(id, out var behaviors))
+			{
+				foreach(var beh in behaviors)
+				{
+					beh?.OnStartTrackingByPlayer(player);
+				}
+			}
+		}
+
+		private void OnServerUntrackChunk(IServerPlayer player, long id)
+		{
+			if(chunks.isEmpty) return;
+			if(chunks.TryGet(id, out var behaviors))
+			{
+				foreach(var beh in behaviors)
+				{
+					beh?.OnEndTrackingByPlayer(player);
+				}
+			}
+		}
+
+		private void OnServerTrackMapChunk(IServerPlayer player, long id)
+		{
+			if(mapChunks.isEmpty) return;
+			if(mapChunks.TryGet(id, out var behaviors))
+			{
+				foreach(var beh in behaviors)
+				{
+					beh?.OnStartTrackingByPlayer(player);
+				}
+			}
+		}
+
+		private void OnServerUntrackMapChunk(IServerPlayer player, long id)
+		{
+			if(mapChunks.isEmpty) return;
+			if(mapChunks.TryGet(id, out var behaviors))
+			{
+				foreach(var beh in behaviors)
+				{
+					beh?.OnEndTrackingByPlayer(player);
+				}
+			}
+		}
+
+		private void OnServerTrackMapRegion(IServerPlayer player, long id)
+		{
+			if(mapRegions.isEmpty) return;
+			if(mapRegions.TryGet(id, out var behaviors))
+			{
+				foreach(var beh in behaviors)
+				{
+					beh?.OnStartTrackingByPlayer(player);
+				}
+			}
+		}
+
+		private void OnServerUntrackMapRegion(IServerPlayer player, long id)
+		{
+			if(mapRegions.isEmpty) return;
+			if(mapRegions.TryGet(id, out var behaviors))
+			{
+				foreach(var beh in behaviors)
+				{
+					beh?.OnEndTrackingByPlayer(player);
+				}
+			}
 		}
 
 		private interface ICtorContainer<T>
