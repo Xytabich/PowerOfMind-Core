@@ -36,12 +36,12 @@ namespace PowerOfMind.Utils
 
 		public static HarmonyMethod GetHarmonyMethod<T>(string name)
 		{
-			return new HarmonyMethod(typeof(T).GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static));
+			return new HarmonyMethod(typeof(T).GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.IgnoreCase | BindingFlags.Static));
 		}
 
 		public static MethodInfo GetMethodInfo<T>(string name, BindingFlags flags)
 		{
-			return typeof(T).GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | flags);
+			return typeof(T).GetMethod(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.IgnoreCase | flags);
 		}
 
 		public static MethodInfo GetMethodInfo(Type type, string name, BindingFlags flags)

@@ -15,12 +15,14 @@ using Vintagestory.Server;
 
 namespace PowerOfMind.Systems.WorldBehaviors
 {
-	public partial class WorldBehaviorsMod : ModSystem, IShutDownMonitor//TODO: database tables for storing data per each chunk/map/column and modid
+	public partial class WorldBehaviorsMod : ModSystem, IShutDownMonitor
 	{
 		private const string PATCH_NAME = "powerofmind:worldbehaviors";
 
 		private static int clientSystemIndex = -1;
 		private static int serverSystemIndex = -1;
+
+		public WBDB Database { get; private set; }
 
 		bool IShutDownMonitor.ShuttingDown => sapi == null ? false : sapi.Server.IsShuttingDown;
 
@@ -37,6 +39,19 @@ namespace PowerOfMind.Systems.WorldBehaviors
 			chunks = new(this, (beh, data) => beh.Initialize(api, data.id, data.index, data.chunk), beh => beh.OnUnloaded());
 			mapChunks = new(this, (beh, data) => beh.Initialize(api, data.index, data.chunk), beh => beh.OnUnloaded());
 			mapRegions = new(this, (beh, data) => beh.Initialize(api, data.index, data.region), beh => beh.OnUnloaded());
+		}
+
+		public override void StartPre(ICoreAPI api)
+		{
+			if(api.Side == EnumAppSide.Server)
+			{
+				const BindingFlags flags = BindingFlags.IgnoreCase | BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
+				Database = new WBDB((GameDatabase)typeof(ChunkServerThread).GetField("gameDatabase", flags)
+					.GetValue(typeof(ServerMain).GetField("chunkThread", flags)
+					.GetValue(typeof(ServerCoreAPI).GetField("server", flags)
+					.GetValue(api))));
+				Database.CreateTablesIfNotExists();
+			}
 		}
 
 		public override void Start(ICoreAPI api)

@@ -18,18 +18,23 @@
 	</PropertyGroup>
 	<ItemGroup>
 		<Reference Include="0Harmony">
-			<HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\0Harmony.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\Lib\0Harmony.dll</HintPath>
+			<Private>False</Private>
+		</Reference>
+		<Reference Include="System.Data.SQLite">
+			<HintPath>C:\Games\Vintagestory18.NET7\Lib\System.Data.SQLite.dll</HintPath>
+			<Private>False</Private>
 		</Reference>
 		<Reference Include="OpenTK.Core">
-		  <HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\OpenTK.Core.dll</HintPath>
+		  <HintPath>C:\Games\Vintagestory18.NET7\Lib\OpenTK.Core.dll</HintPath>
 		  <Private>False</Private>
 		</Reference>
 		<Reference Include="OpenTK.Graphics">
-		  <HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\OpenTK.Graphics.dll</HintPath>
+		  <HintPath>C:\Games\Vintagestory18.NET7\Lib\OpenTK.Graphics.dll</HintPath>
 		  <Private>False</Private>
 		</Reference>
 		<Reference Include="protobuf-net">
-			<HintPath>..\..\..\Games\Vintagestory18.NET7\Lib\protobuf-net.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\Lib\protobuf-net.dll</HintPath>
 		</Reference>
 		<Reference Include="Unity.Mathematics">
 			<HintPath>.\Unity.Mathematics.dll</HintPath>
@@ -39,7 +44,7 @@
 			<Private>False</Private>
 		</Reference>
 		<Reference Include="VintagestoryLib">
-			<HintPath>..\..\..\Games\Vintagestory18.NET7\VintagestoryLib.dll</HintPath>
+			<HintPath>C:\Games\Vintagestory18.NET7\VintagestoryLib.dll</HintPath>
 		</Reference>
 		<Reference Include="VSSurvivalMod">
 			<HintPath>C:\Games\Vintagestory18.NET7\Mods\VSSurvivalMod.dll</HintPath>
