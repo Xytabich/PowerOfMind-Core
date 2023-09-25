@@ -89,7 +89,7 @@ namespace PowerOfMind.Graphics
 					this.setValue = setValue;
 				}
 
-				void IUniformVariableHandler.SetValue<T0>(in UniformPropertyHandle handle, T0* ptr, int count)
+				void IUniformVariableHandler.SetValue(in UniformPropertyHandle handle, void* ptr, int count)
 				{
 					setValue(handle.Location, count, (T*)ptr);
 				}
@@ -106,7 +106,7 @@ namespace PowerOfMind.Graphics
 					this.setValue = setValue;
 				}
 
-				void IUniformVariableHandler.SetValue<T0>(in UniformPropertyHandle handle, T0* ptr, int count)
+				void IUniformVariableHandler.SetValue(in UniformPropertyHandle handle, void* ptr, int count)
 				{
 					setValue(handle.Location, count, false, (T*)ptr);
 				}

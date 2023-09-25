@@ -21,7 +21,7 @@
 
 		private class DummyHandler : IUniformVariableHandler
 		{
-			unsafe void IUniformVariableHandler.SetValue<T>(in UniformPropertyHandle handle, T* ptr, int count) { }
+			unsafe void IUniformVariableHandler.SetValue(in UniformPropertyHandle handle, void* ptr, int count) { }
 		}
 	}
 }

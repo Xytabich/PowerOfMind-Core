@@ -17,22 +17,22 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 	{
 		public const int BLOCK_SIZE = 1024;
 
-		public bool failed = false;
+		public bool Failed = false;
 
-		public RenderPassGroup[] renderPasses;
-		public GraphicsCommand[] commands;
-		public UniformPointer[] uniformsMap;
-		public int[] shadowUniformsMap = null;
-		public byte[] uniformsData;
+		public RenderPassGroup[] RenderPasses;
+		public GraphicsCommand[] Commands;
+		public UniformPointer[] UniformsMap;
+		public int[] ShadowUniformsMap = null;
+		public byte[] UniformsData;
 
-		public uint verticesCount;
-		public uint indicesCount;
-		public int verticesStride;
-		public VertexDeclaration declaration;
-		public readonly List<byte[]> verticesBlocks = new List<byte[]>();
-		public uint[] indices;
+		public uint VerticesCount;
+		public uint IndicesCount;
+		public int VerticesStride;
+		public VertexDeclaration Declaration;
+		public readonly List<byte[]> VerticesBlocks = new List<byte[]>();
+		public uint[] Indices;
 
-		public VertexDeclaration shadowDeclaration = default;
+		public VertexDeclaration ShadowDeclaration = default;
 
 		private readonly ICoreClientAPI capi;
 		private readonly IExtendedShaderProgram shader;
@@ -80,11 +80,11 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 					builderStruct.Build(context);
 				}
 
-				context.BuildCommands(out commands, out indices, out uniformsData, out uniformsMap, out renderPasses);
+				context.BuildCommands(out Commands, out Indices, out UniformsData, out UniformsMap, out RenderPasses);
 
 				if(shadowShader != null)
 				{
-					foreach(var pass in renderPasses)
+					foreach(var pass in RenderPasses)
 					{
 						if(pass.RenderPass switch {
 							EnumChunkRenderPass.Opaque => true,
@@ -95,13 +95,13 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 						})
 						{
 							var attributes = new RefList<VertexAttribute>();
-							shadowShader.MapDeclaration(declaration, attributes);
+							shadowShader.MapDeclaration(Declaration, attributes);
 
 							for(int i = 0; i < attributes.Count; i++)
 							{
 								if(attributes[i].Alias == VertexAttributeAlias.POSITION)
 								{
-									shadowDeclaration = new VertexDeclaration(attributes.ToArray());
+									ShadowDeclaration = new VertexDeclaration(attributes.ToArray());
 
 									context.uniformToIndexMap.Clear();
 									for(int j = 0; j < builders.Length; j++)
@@ -122,19 +122,19 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 									var drawUniforms = shader.Uniforms.Properties;
 									var shadowUniforms = shadowShader.Uniforms.Properties;
-									shadowUniformsMap = new int[uniformsMap.Length];
-									for(int j = uniformsMap.Length - 1; j >= 0; j--)
+									ShadowUniformsMap = new int[UniformsMap.Length];
+									for(int j = UniformsMap.Length - 1; j >= 0; j--)
 									{
-										int index = uniformsMap[j].Index;
+										int index = UniformsMap[j].Index;
 										if(context.uniformToIndexMap.TryGetValue(index, out var shadowUniformIndex) &&
 											drawUniforms[index].Type == shadowUniforms[shadowUniformIndex].Type &&
 											drawUniforms[index].UniformSize == shadowUniforms[shadowUniformIndex].UniformSize)
 										{
-											shadowUniformsMap[j] = shadowUniformIndex;
+											ShadowUniformsMap[j] = shadowUniformIndex;
 										}
 										else
 										{
-											shadowUniformsMap[j] = -1;
+											ShadowUniformsMap[j] = -1;
 										}
 									}
 									break;
@@ -147,7 +147,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 			}
 			catch(Exception e)
 			{
-				failed = true;
+				Failed = true;
 				var msg = string.Format("Exception while trying to build a batch:\n{0}", e);
 				capi.Event.EnqueueMainThreadTask(() => capi.Logger.Log(EnumLogType.Warning, msg), "powerofmind:batchbuildlog");
 			}

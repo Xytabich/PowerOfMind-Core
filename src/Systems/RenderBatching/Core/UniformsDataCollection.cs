@@ -8,7 +8,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 {
 	public class UniformsDataCollection
 	{
-		public readonly RefList<UniformBlock> blocks;
+		public readonly RefList<UniformBlock> Blocks;
 
 		private readonly Dictionary<UniformBlockKey, int> blockKeyToIndex;
 		private ByteBuffer dataBuffer;
@@ -16,7 +16,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 		public UniformsDataCollection(int capacity)
 		{
 			this.dataBuffer = new ByteBuffer(capacity);
-			this.blocks = blocks = new RefList<UniformBlock>();
+			this.Blocks = Blocks = new RefList<UniformBlock>();
 			this.blockKeyToIndex = new Dictionary<UniformBlockKey, int>(new UniformBlockKeyEqualityComparer(this));
 		}
 
@@ -25,22 +25,51 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 			return dataBuffer.ToArray();
 		}
 
+		/// <summary>
+		/// Registers uniform data and returns the identifier associated with this data.
+		/// </summary>
+		/// <param name="ptr">Pointer to data or null, if it is necessary to apply default data</param>
+		/// <param name="size">Data size in bytes</param>
+		/// <returns>The block index</returns>
 		public unsafe int PutUniformData(byte* ptr, int size)
 		{
-			if(MemUtils.MemIsZero(ptr, size)) return -1;
-
-			dataBuffer.EnsureBufferSize(size);
-			fixed(byte* buffPtr = dataBuffer.buffer)
+			UniformBlockKey key;
+			int blockIndex;
+			if(ptr == null)
 			{
-				Buffer.MemoryCopy(ptr, buffPtr + dataBuffer.offset, size, size);
+				key = new UniformBlockKey(-2, size, -1);
+				if(!blockKeyToIndex.TryGetValue(key, out blockIndex))
+				{
+					blockIndex = Blocks.Count;
+					blockKeyToIndex[key] = blockIndex;
+					Blocks.Add(new UniformBlock(-1, size));
+				}
 			}
-			var key = new UniformBlockKey(dataBuffer.offset, size, UniformBlockKey.GetHash(ptr, size));
-			if(!blockKeyToIndex.TryGetValue(key, out var blockIndex))
+			else if(MemUtils.MemIsZero(ptr, size))
 			{
-				blockIndex = blocks.Count;
-				blockKeyToIndex[key] = blockIndex;
-				blocks.Add(new UniformBlock(dataBuffer.offset, size));
-				dataBuffer.offset += size;
+				key = new UniformBlockKey(-1, size, 0);
+				if(!blockKeyToIndex.TryGetValue(key, out blockIndex))
+				{
+					blockIndex = Blocks.Count;
+					blockKeyToIndex[key] = blockIndex;
+					Blocks.Add(new UniformBlock(-1, size));
+				}
+			}
+			else
+			{
+				dataBuffer.EnsureBufferSize(size);
+				fixed(byte* buffPtr = dataBuffer.buffer)
+				{
+					Buffer.MemoryCopy(ptr, buffPtr + dataBuffer.offset, size, size);
+				}
+				key = new UniformBlockKey(dataBuffer.offset, size, UniformBlockKey.GetHash(ptr, size));
+				if(!blockKeyToIndex.TryGetValue(key, out blockIndex))
+				{
+					blockIndex = Blocks.Count;
+					blockKeyToIndex[key] = blockIndex;
+					Blocks.Add(new UniformBlock(dataBuffer.offset, size));
+					dataBuffer.offset += size;
+				}
 			}
 			return blockIndex;
 		}
@@ -105,7 +134,13 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 			bool IEqualityComparer<UniformBlockKey>.Equals(UniformBlockKey x, UniformBlockKey y)
 			{
-				return x.hash == y.hash && x.size == y.size && collection.DataEquals(x.offset, y.offset, x.size);
+				if(x.size != y.size) return false;
+				if(x.offset == y.offset) return true;
+				if((x.offset >= 0) & (y.offset >= 0))
+				{
+					return x.hash == y.hash && collection.DataEquals(x.offset, y.offset, x.size);
+				}
+				return false;
 			}
 
 			int IEqualityComparer<UniformBlockKey>.GetHashCode(UniformBlockKey key)
@@ -140,13 +175,16 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 		public struct UniformBlock
 		{
-			public readonly int offset;
-			public readonly int size;
+			/// <summary>
+			/// The offset in the data buffer, or -1 if the block refers to the zero value, or -2 if the block refers to the default value.
+			/// </summary>
+			public readonly int Offset;
+			public readonly int Size;
 
 			public UniformBlock(int offset, int size)
 			{
-				this.offset = offset;
-				this.size = size;
+				this.Offset = offset;
+				this.Size = size;
 			}
 		}
 	}

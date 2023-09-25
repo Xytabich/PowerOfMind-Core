@@ -124,10 +124,10 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 					);
 				}
 
-				task.declaration = new VertexDeclaration(attributes.ToArray());
-				task.verticesStride = vertStride;
+				task.Declaration = new VertexDeclaration(attributes.ToArray());
+				task.VerticesStride = vertStride;
 
-				task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
+				task.VerticesBlocks.Add(new byte[task.VerticesStride * BLOCK_SIZE]);
 				indicesBlocks.Add(new uint[BLOCK_SIZE]);
 			}
 
@@ -259,7 +259,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 					return CompareUniformGroups(a.uniformsIndex, b.uniformsIndex, uniformsPerDrawGroup, compareOrderByUsage);
 				});
 
-				indices = new uint[task.indicesCount];
+				indices = new uint[task.IndicesCount];
 				var list = new List<GraphicsCommand>();
 				var rpGroups = new List<RenderPassGroup>();
 				currentUniforms.Fill(-1);
@@ -307,76 +307,76 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 							currentUniforms[j] = uniformsPerDrawGroup[j + drawGroup.uniformsIndex];
 
-							var block = this.uniformsData.blocks[currentUniforms[j]];
+							var block = this.uniformsData.Blocks[currentUniforms[j]];
 							var uniformIndex = pointers[uniformsMap[j]].Index;
 
-							var count = (uint)(block.size / (shaderUniforms[uniformIndex].StructSize * ShaderExtensions.GetTypeSize(shaderUniforms[uniformIndex].Type)));
+							var count = (uint)(block.Size / (shaderUniforms[uniformIndex].StructSize * ShaderExtensions.GetTypeSize(shaderUniforms[uniformIndex].Type)));
 							switch(shaderUniforms[uniformIndex].StructType)
 							{
 								case EnumUniformStructType.Sampler1D:
 								case EnumUniformStructType.Sampler1DShadow:
 								case EnumUniformStructType.IntSampler1D:
 								case EnumUniformStructType.UnsignedIntSampler1D:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture1D));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture1D));
 									break;
 								case EnumUniformStructType.Sampler2D:
 								case EnumUniformStructType.Sampler2DShadow:
 								case EnumUniformStructType.IntSampler2D:
 								case EnumUniformStructType.UnsignedIntSampler2D:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2D));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2D));
 									break;
 								case EnumUniformStructType.Sampler3D:
 								case EnumUniformStructType.IntSampler3D:
 								case EnumUniformStructType.UnsignedIntSampler3D:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture3D));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture3D));
 									break;
 								case EnumUniformStructType.Sampler2DRect:
 								case EnumUniformStructType.Sampler2DRectShadow:
 								case EnumUniformStructType.IntSampler2DRect:
 								case EnumUniformStructType.UnsignedIntSampler2DRect:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureRectangle));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureRectangle));
 									break;
 								case EnumUniformStructType.SamplerCube:
 								case EnumUniformStructType.SamplerCubeShadow:
 								case EnumUniformStructType.IntSamplerCube:
 								case EnumUniformStructType.UnsignedIntSamplerCube:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureCubeMap));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureCubeMap));
 									break;
 								case EnumUniformStructType.Sampler1DArray:
 								case EnumUniformStructType.Sampler1DArrayShadow:
 								case EnumUniformStructType.IntSampler1DArray:
 								case EnumUniformStructType.UnsignedIntSampler1DArray:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture1DArray));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture1DArray));
 									break;
 								case EnumUniformStructType.Sampler2DArray:
 								case EnumUniformStructType.Sampler2DArrayShadow:
 								case EnumUniformStructType.IntSampler2DArray:
 								case EnumUniformStructType.UnsignedIntSampler2DArray:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DArray));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DArray));
 									break;
 								case EnumUniformStructType.SamplerBuffer:
 								case EnumUniformStructType.IntSamplerBuffer:
 								case EnumUniformStructType.UnsignedIntSamplerBuffer:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureBuffer));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureBuffer));
 									break;
 								case EnumUniformStructType.SamplerCubeMapArray:
 								case EnumUniformStructType.SamplerCubeMapArrayShadow:
 								case EnumUniformStructType.IntSamplerCubeMapArray:
 								case EnumUniformStructType.UnsignedIntSamplerCubeMapArray:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureCubeMapArray));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.TextureCubeMapArray));
 									break;
 								case EnumUniformStructType.Sampler2DMultisample:
 								case EnumUniformStructType.IntSampler2DMultisample:
 								case EnumUniformStructType.UnsignedIntSampler2DMultisample:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DMultisample));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DMultisample));
 									break;
 								case EnumUniformStructType.Sampler2DMultisampleArray:
 								case EnumUniformStructType.IntSampler2DMultisampleArray:
 								case EnumUniformStructType.UnsignedIntSampler2DMultisampleArray:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DMultisampleArray));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j], EnumTextureTarget.Texture2DMultisampleArray));
 									break;
 								default:
-									list.Add(new GraphicsCommand((uint)block.offset, count, (uint)uniformsMap[j]));
+									list.Add(new GraphicsCommand((uint)block.Offset, count, (uint)uniformsMap[j]));
 									break;
 							}
 						}
@@ -438,7 +438,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 					if(componentsToMap.TryGetValue(tmpAttributes[i].Location, out int mapIndex))
 					{
 						int attribIndex = builderVertexMaps[builderIndex][mapIndex].Value;
-						ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
+						ref readonly var vertAttrib = ref task.Declaration.Attributes[attribIndex];
 						if(ShaderExtensions.GetTypeSize(tmpAttributes[i].Type) == ShaderExtensions.GetTypeSize(vertAttrib.Type))//TODO: log warning otherwise?
 						{
 							componentsToMap.Remove(tmpAttributes[i].Location);
@@ -485,7 +485,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 				var map = builderVertexMaps[builderIndex];
 				for(int i = 0; i < map.Length; i++)
 				{
-					componentsToMap[task.declaration.Attributes[map[i].Value].Location] = i;
+					componentsToMap[task.Declaration.Attributes[map[i].Value].Location] = i;
 				}
 
 				hasVertices = false;
@@ -522,10 +522,10 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 					commands.Add(new BuildCommand(BuildCommand.CommandType.SetPass, (uint)renderPass));
 
 					beforeCmd?.Invoke();
-					commands.Add(new BuildCommand(BuildCommand.CommandType.DrawIndices, task.indicesCount, (uint)currentIndCount));
+					commands.Add(new BuildCommand(BuildCommand.CommandType.DrawIndices, task.IndicesCount, (uint)currentIndCount));
 
-					task.verticesCount += (uint)currentVertCount;
-					task.indicesCount += (uint)currentIndCount;
+					task.VerticesCount += (uint)currentVertCount;
+					task.IndicesCount += (uint)currentIndCount;
 					currentVertBlock += (vertOffsetLocal + currentVertCount) / BLOCK_SIZE;
 					currentIndBlock += (indOffsetLocal + currentIndCount) / BLOCK_SIZE;
 					vertOffsetLocal = (vertOffsetLocal + currentVertCount) % BLOCK_SIZE;
@@ -551,15 +551,15 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 			private unsafe void CopyComponentData(int attribIndex, byte* dataPtr, int stride)
 			{
-				ref readonly var vertAttrib = ref task.declaration.Attributes[attribIndex];
-				int buffStride = task.verticesStride;
+				ref readonly var vertAttrib = ref task.Declaration.Attributes[attribIndex];
+				int buffStride = task.VerticesStride;
 
 				long copyCount = ShaderExtensions.GetTypeSize(vertAttrib.Type) * vertAttrib.Size;
-				long buffOffset = vertOffsetLocal * task.verticesStride;
+				long buffOffset = vertOffsetLocal * task.VerticesStride;
 				int countToCopy = currentVertCount;
 
 				int blockIndex = this.currentVertBlock;
-				var currentDataBlock = task.verticesBlocks[blockIndex];
+				var currentDataBlock = task.VerticesBlocks[blockIndex];
 				if(countToCopy > BLOCK_SIZE - vertOffsetLocal)
 				{
 					int copyLeft = BLOCK_SIZE - vertOffsetLocal;
@@ -577,7 +577,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 						buffOffset = 0;
 					}
 
-					currentDataBlock = task.verticesBlocks[++blockIndex];
+					currentDataBlock = task.VerticesBlocks[++blockIndex];
 					int count = countToCopy / BLOCK_SIZE;
 					while(count > 0)
 					{
@@ -594,7 +594,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 							}
 						}
 
-						currentDataBlock = task.verticesBlocks[++blockIndex];
+						currentDataBlock = task.VerticesBlocks[++blockIndex];
 						countToCopy -= BLOCK_SIZE;
 						count--;
 					}
@@ -618,7 +618,7 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 			private unsafe void InsertIndices(uint* indices)
 			{
 				int countToCopy = currentIndCount;
-				uint indicesOffset = task.verticesCount;
+				uint indicesOffset = task.VerticesCount;
 				int blockIndex = currentIndBlock;
 				int blockOffset = indOffsetLocal;
 				while(countToCopy > 0)
@@ -661,16 +661,16 @@ namespace PowerOfMind.Systems.RenderBatching.Core
 
 			private void EnsureCapacity()
 			{
-				if(currentVertBlock == task.verticesBlocks.Count)//if the previous block was filled to the boundary
+				if(currentVertBlock == task.VerticesBlocks.Count)//if the previous block was filled to the boundary
 				{
-					task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
+					task.VerticesBlocks.Add(new byte[task.VerticesStride * BLOCK_SIZE]);
 				}
 				if(currentVertCount > BLOCK_SIZE - vertOffsetLocal)
 				{
 					int addBlocks = (currentVertCount - (BLOCK_SIZE - vertOffsetLocal) - 1) / BLOCK_SIZE + 1;
 					while(addBlocks > 0)
 					{
-						task.verticesBlocks.Add(new byte[task.verticesStride * BLOCK_SIZE]);
+						task.VerticesBlocks.Add(new byte[task.VerticesStride * BLOCK_SIZE]);
 						addBlocks--;
 					}
 				}

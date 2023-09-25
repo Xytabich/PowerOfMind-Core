@@ -7,9 +7,21 @@ namespace PowerOfMind.Systems.RenderBatching.Draw
 	public readonly struct GraphicsCommand
 	{
 		public readonly GraphicsCommandType Type;
+		/// <summary>
+		/// Index offset for <see cref="GraphicsCommandType.Draw"/> or data offset in byte array for <see cref="GraphicsCommandType.SetUniform"/>
+		/// </summary>
 		public readonly uint Offset;
+		/// <summary>
+		/// Number of indexes for <see cref="GraphicsCommandType.Draw"/> or number of elements for <see cref="GraphicsCommandType.SetUniform"/>
+		/// </summary>
 		public readonly uint Count;
+		/// <summary>
+		/// Index of uniform for <see cref="GraphicsCommandType.SetUniform"/> or <see cref="GraphicsCommandType.BindTexture"/>
+		/// </summary>
 		public readonly uint Index;
+		/// <summary>
+		/// Texture target for <see cref="GraphicsCommandType.BindTexture"/>
+		/// </summary>
 		public readonly uint Arg;
 
 		public GraphicsCommand(uint offset, uint count)
@@ -23,7 +35,7 @@ namespace PowerOfMind.Systems.RenderBatching.Draw
 
 		public GraphicsCommand(uint offset, uint count, uint index)
 		{
-			Type = GraphicsCommandType.SetUniform;
+			Type = offset == uint.MaxValue ? GraphicsCommandType.SetUniformZero : (offset == uint.MaxValue - 1 ? GraphicsCommandType.SetUniformDefault : GraphicsCommandType.SetUniform);
 			Offset = offset;
 			Count = count;
 			Index = index;
@@ -32,7 +44,7 @@ namespace PowerOfMind.Systems.RenderBatching.Draw
 
 		public GraphicsCommand(uint offset, uint count, uint index, EnumTextureTarget target)
 		{
-			Type = GraphicsCommandType.BindTexture;
+			Type = offset == uint.MaxValue ? GraphicsCommandType.SetUniformZero : (offset == uint.MaxValue - 1 ? GraphicsCommandType.SetUniformDefault : GraphicsCommandType.BindTexture);
 			Offset = offset;
 			Count = count;
 			Index = index;
@@ -40,10 +52,12 @@ namespace PowerOfMind.Systems.RenderBatching.Draw
 		}
 	}
 
-	public enum GraphicsCommandType
+	public enum GraphicsCommandType : uint
 	{
 		Draw,
 		SetUniform,
+		SetUniformZero,
+		SetUniformDefault,
 		BindTexture
 	}
 }

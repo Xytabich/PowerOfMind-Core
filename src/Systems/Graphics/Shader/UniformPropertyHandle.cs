@@ -4,13 +4,38 @@ namespace PowerOfMind.Graphics.Shader
 {
 	public readonly struct UniformPropertyHandle
 	{
+		/// <summary>
+		/// Name of the uniform in the shader
+		/// </summary>
 		public readonly string Name;
+		/// <summary>
+		/// General alias for uniform
+		/// </summary>
 		public readonly string Alias;
+		/// <summary>
+		/// The location to which this uniform is bound
+		/// </summary>
 		public readonly int Location;
+		/// <summary>
+		/// Uniform component type
+		/// </summary>
 		public readonly EnumShaderPrimitiveType Type;
+		/// <summary>
+		/// Type of structure described by the uniform
+		/// </summary>
 		public readonly EnumUniformStructType StructType;
+		/// <summary>
+		/// If uniform is an array, denotes the number of components multiplied by the size of the array.
+		/// Otherwise it will be the same size as <see cref="StructSize"/>.
+		/// </summary>
 		public readonly int UniformSize;
+		/// <summary>
+		/// Number of components in a vector or matrix
+		/// </summary>
 		public readonly int StructSize;
+		/// <summary>
+		/// Data slot (for example texture slot) used by default for this uniform
+		/// </summary>
 		public readonly int ReferenceSlot;
 
 		private readonly IUniformVariableHandler handler;
@@ -50,7 +75,7 @@ namespace PowerOfMind.Graphics.Shader
 			return new UniformPropertyHandle(Location, referenceSlot, Name, Alias, Type, StructType, UniformSize, StructSize, handler);
 		}
 
-		public unsafe void SetValue<T>(T* ptr, int count) where T : unmanaged
+		public unsafe void SetValue(void* ptr, int count)
 		{
 			if(handler == null) throw new Exception("This property cannot be assigned in this way");
 			handler.SetValue(this, ptr, count);

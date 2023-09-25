@@ -59,6 +59,7 @@ namespace PowerOfMind.Systems.RenderBatching
 		private readonly ICoreClientAPI capi;
 		private readonly GraphicsSystem graphics;
 
+		private UniformsStateInfo uniformsState;
 		private byte[] dummyBytes = new byte[256];
 		private IExtendedShaderProgram shadowShader = null;
 		private int shadowOriginPos;
@@ -290,8 +291,8 @@ _fail:
 			rapi.GlLoadMatrix(rapi.CameraMatrixOrigin);
 
 			BatchDrawCall renderInfo = default;
-			renderInfo.graphics = graphics;
-			renderInfo.rapi = rapi;
+			renderInfo.Graphics = graphics;
+			renderInfo.Rapi = rapi;
 
 			var playerCamPos = capi.World.Player.Entity.CameraPos;
 			foreach(var pair in shaderToId)
@@ -299,64 +300,72 @@ _fail:
 				ref readonly var shader = ref shaders[pair.Value];
 				if(shader.shaderChunksChain >= 0)
 				{
-					renderInfo.shader = shader.shader;
-					renderInfo.shaderUniforms = renderInfo.shader.Uniforms.Properties;
+					renderInfo.Shader = shader.shader;
+					renderInfo.ShaderUniforms = renderInfo.Shader.Uniforms.Properties;
 
-					bool useShader = true;
+					bool initShader = true;
 					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
 					{
 						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
 						if(info.drawer != null)
 						{
-							renderInfo.pass = info.drawer.TryGetPassIndex(pass);
-							if(renderInfo.pass >= 0)
+							renderInfo.Pass = info.drawer.TryGetPassIndex(pass);
+							if(renderInfo.Pass >= 0)
 							{
-								if(useShader)
+								if(initShader)
 								{
-									useShader = false;
+									initShader = false;
 
-									renderInfo.shader.Use();
-									if(shader.ambientColor >= 0) renderInfo.shaderUniforms[shader.ambientColor].SetValue(rapi.AmbientColor);
-									if(shader.fogColor >= 0) renderInfo.shaderUniforms[shader.fogColor].SetValue(rapi.FogColor);
-									if(shader.fogDensity >= 0) renderInfo.shaderUniforms[shader.fogDensity].SetValue(rapi.FogDensity);
-									if(shader.fogMin >= 0) renderInfo.shaderUniforms[shader.fogMin].SetValue(rapi.FogMin);
+									uniformsState.EnsureDataSize((12 + 16 * 4) * 4);
+									uniformsState.EnsureUniformsCount(renderInfo.ShaderUniforms.Length);
+									uniformsState.Reset();
 
-									renderInfo.shaderUniforms[shader.projMatrix].SetValue(rapi.CurrentProjectionMatrix);
-									if(shader.mvMatrix >= 0) renderInfo.shaderUniforms[shader.mvMatrix].SetValue(rapi.CurrentModelviewMatrix);
-									if(shader.viewMatrix >= 0) renderInfo.shaderUniforms[shader.viewMatrix].SetValue(rapi.CameraMatrixOriginf);
-								}
+									renderInfo.Shader.Use();
+									int dataOffset = 0;
+									if(shader.ambientColor >= 0) SetUniformDefault(ref renderInfo, shader.ambientColor, rapi.AmbientColor, ref dataOffset);
+									if(shader.fogColor >= 0) SetUniformDefault(ref renderInfo, shader.fogColor, rapi.FogColor, ref dataOffset);
+									if(shader.fogDensity >= 0) SetUniformDefault(ref renderInfo, shader.fogDensity, rapi.FogDensity, ref dataOffset);
+									if(shader.fogMin >= 0) SetUniformDefault(ref renderInfo, shader.fogMin, rapi.FogMin, ref dataOffset);
 
-								var origin = chunks[chunk.chunkId].origin;
+									SetUniformDefault(ref renderInfo, shader.projMatrix, rapi.CurrentProjectionMatrix, ref dataOffset);
+									if(shader.mvMatrix >= 0) SetUniformDefault(ref renderInfo, shader.mvMatrix, rapi.CurrentModelviewMatrix, ref dataOffset);
+									if(shader.viewMatrix >= 0) SetUniformDefault(ref renderInfo, shader.viewMatrix, rapi.CameraMatrixOriginf, ref dataOffset);
 
-								if(shader.originPos >= 0)
-								{
-									if(shader.modelMatrix >= 0)
+									var origin = chunks[chunk.chunkId].origin;
+
+									if(shader.originPos >= 0)
 									{
-										renderInfo.shaderUniforms[shader.modelMatrix].SetValue(float4x4.identity);
+										if(shader.modelMatrix >= 0)
+										{
+											renderInfo.ShaderUniforms[shader.modelMatrix].SetValue(float4x4.identity);
+										}
+
+										SetUniformDefault(ref renderInfo, shader.originPos,
+											new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z)),
+											ref dataOffset);
+									}
+									else
+									{
+										SetUniformDefault(ref renderInfo, shader.modelMatrix,
+											float4x4.Translate(new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z))),
+											ref dataOffset);
 									}
 
-									renderInfo.shaderUniforms[shader.originPos].SetValue(
-										new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z)));
-								}
-								else
-								{
-									var mat = new float[16];
-									Mat4f.Identity(mat);
-									Mat4f.Translate(mat, mat, (float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z));
-									renderInfo.shaderUniforms[shader.modelMatrix].SetValue(mat);
+									renderInfo.UniformsState = uniformsState;
 								}
 
 								info.drawer.Render(ref renderInfo, ref dummyBytes);
 							}
 						}
 					}
-					if(!useShader) renderInfo.shader.Stop();
+					if(!initShader) renderInfo.Shader.Stop();
 				}
 			}
+
 			rapi.GlPopMatrix();
 		}
 
-		private void RenderShadow(EnumChunkRenderPass pass)
+		private unsafe void RenderShadow(EnumChunkRenderPass pass)
 		{
 			rapi.GLDepthMask(true);
 			rapi.GlToggleBlend(false);
@@ -374,10 +383,10 @@ _fail:
 			}
 
 			BatchDrawCall renderInfo = default;
-			renderInfo.graphics = graphics;
-			renderInfo.rapi = rapi;
-			renderInfo.shader = shadowShader;
-			renderInfo.shaderUniforms = shadowShader.Uniforms.Properties;
+			renderInfo.Graphics = graphics;
+			renderInfo.Rapi = rapi;
+			renderInfo.Shader = shadowShader;
+			renderInfo.ShaderUniforms = shadowShader.Uniforms.Properties;
 
 			var playerCamPos = capi.World.Player.Entity.CameraPos;
 			var camPos = new double3(playerCamPos.X, playerCamPos.Y, playerCamPos.Z);
@@ -386,15 +395,28 @@ _fail:
 				ref readonly var shader = ref shaders[pair.Value];
 				if(shader.shaderChunksChain >= 0)
 				{
+					bool initShader = true;
 					foreach(var chunk in shaderChunks.GetEnumerable(shader.shaderChunksChain))
 					{
 						ref readonly var info = ref chunkShaders[chunk.chunkShaderId];
 						if(info.drawer != null)
 						{
-							renderInfo.pass = info.drawer.TryGetPassIndex(pass);
-							if(renderInfo.pass >= 0)
+							renderInfo.Pass = info.drawer.TryGetPassIndex(pass);
+							if(renderInfo.Pass >= 0)
 							{
-								renderInfo.shaderUniforms[shadowOriginPos].SetValue((float3)(chunks[chunk.chunkId].origin - camPos));
+								if(initShader)
+								{
+									initShader = false;
+
+									uniformsState.EnsureDataSize(sizeof(float3));
+									uniformsState.EnsureUniformsCount(renderInfo.ShaderUniforms.Length);
+									uniformsState.Reset();
+
+									int dataOffset = 0;
+									SetUniformDefault(ref renderInfo, shadowOriginPos, (float3)(chunks[chunk.chunkId].origin - camPos), ref dataOffset);
+
+									renderInfo.UniformsState = uniformsState;
+								}
 
 								info.drawer.RenderShadow(ref renderInfo, ref dummyBytes);
 							}
@@ -402,7 +424,37 @@ _fail:
 					}
 				}
 			}
+
 			rapi.GlToggleBlend(true);
+		}
+
+		private unsafe void SetUniformDefault(ref BatchDrawCall renderInfo, int index, Vec4f value, ref int dataOffset)
+		{
+			SetUniformDefault(ref renderInfo, index, new float4(value.X, value.Y, value.Z, value.W), ref dataOffset);
+		}
+
+		private unsafe void SetUniformDefault(ref BatchDrawCall renderInfo, int index, Vec3f value, ref int dataOffset)
+		{
+			SetUniformDefault(ref renderInfo, index, new float3(value.X, value.Y, value.Z), ref dataOffset);
+		}
+
+		private unsafe void SetUniformDefault<T>(ref BatchDrawCall renderInfo, int index, T value, ref int dataOffset) where T : unmanaged
+		{
+			renderInfo.ShaderUniforms[index].SetValue(value);
+			var count = sizeof(T) / (renderInfo.ShaderUniforms[index].StructSize * ShaderExtensions.GetTypeSize(renderInfo.ShaderUniforms[index].Type));
+			uniformsState.AddUniformData(index, value, count, dataOffset);
+			dataOffset += sizeof(T);
+		}
+
+		private unsafe void SetUniformDefault<T>(ref BatchDrawCall renderInfo, int index, T[] value, ref int dataOffset) where T : unmanaged
+		{
+			renderInfo.ShaderUniforms[index].SetValue(value);
+			var count = (sizeof(T) * value.Length) / (renderInfo.ShaderUniforms[index].StructSize * ShaderExtensions.GetTypeSize(renderInfo.ShaderUniforms[index].Type));
+			fixed(T* ptr = value)
+			{
+				uniformsState.AddUniformData(index, ptr, sizeof(T) * value.Length, count, dataOffset);
+			}
+			dataOffset += sizeof(T) * value.Length;
 		}
 
 		private void Update(float dt)
@@ -461,21 +513,21 @@ _fail:
 					forceRebuild = true;
 				}
 			}
-			if(!task.failed)
+			if(!task.Failed)
 			{
 				ref var chunkShader = ref chunkShaders[task.chunkShaderId];
 				chunkDataHelper.Clear();
-				chunkDataHelper.verticesStride = task.verticesStride;
-				chunkDataHelper.verticesCount = task.verticesCount;
-				chunkDataHelper.indicesCount = task.indicesCount;
-				chunkDataHelper.vertexDeclaration = task.declaration;
+				chunkDataHelper.verticesStride = task.VerticesStride;
+				chunkDataHelper.verticesCount = task.VerticesCount;
+				chunkDataHelper.indicesCount = task.IndicesCount;
+				chunkDataHelper.vertexDeclaration = task.Declaration;
 
-				var drawHandle = chunkShader.drawer?.drawHandle;
-				var shadowHandle = chunkShader.drawer?.shadowHandle;
-				if(task.verticesBlocks.Count == 1)
+				var drawHandle = chunkShader.drawer?.DrawHandle;
+				var shadowHandle = chunkShader.drawer?.ShadowHandle;
+				if(task.VerticesBlocks.Count == 1)
 				{
-					chunkDataHelper.verticesData = task.verticesBlocks[0];
-					chunkDataHelper.indicesData = task.indices;
+					chunkDataHelper.verticesData = task.VerticesBlocks[0];
+					chunkDataHelper.indicesData = task.Indices;
 					if(drawHandle == null)
 					{
 						drawHandle = rapi.UploadDrawable(chunkDataHelper);
@@ -487,7 +539,7 @@ _fail:
 				}
 				else
 				{
-					chunkDataHelper.indicesData = task.indices;
+					chunkDataHelper.indicesData = task.Indices;
 
 					//First allocate the required size (i.e. a null pointer will just allocate the buffer and won't upload any data)
 					chunkDataHelper.verticesData = null;
@@ -501,7 +553,7 @@ _fail:
 					}
 
 					//Then uploading data block-by-block
-					int lastIndex = task.verticesBlocks.Count - 1;
+					int lastIndex = task.VerticesBlocks.Count - 1;
 					chunkDataHelper.verticesCount = BatchBuildTask.BLOCK_SIZE;
 					chunkDataHelper.indicesCount = 0;//Uploading only vertices
 					chunkDataHelper.indicesData = null;
@@ -510,18 +562,18 @@ _fail:
 					{
 						if(i == lastIndex)
 						{
-							chunkDataHelper.verticesCount = task.verticesCount % BatchBuildTask.BLOCK_SIZE;
+							chunkDataHelper.verticesCount = task.VerticesCount % BatchBuildTask.BLOCK_SIZE;
 						}
-						chunkDataHelper.verticesData = task.verticesBlocks[i];
+						chunkDataHelper.verticesData = task.VerticesBlocks[i];
 						rapi.UpdateDrawablePart(drawHandle, chunkDataHelper, 0, vertBlockOffset);
 						vertBlockOffset[0] += BatchBuildTask.BLOCK_SIZE;
 					}
 				}
 
-				if(!task.shadowDeclaration.IsEmpty)
+				if(!task.ShadowDeclaration.IsEmpty)
 				{
-					chunkDataHelper.vertexDeclaration = task.shadowDeclaration;
-					chunkDataHelper.indicesCount = task.indicesCount;
+					chunkDataHelper.vertexDeclaration = task.ShadowDeclaration;
+					chunkDataHelper.indicesCount = task.IndicesCount;
 
 					if(shadowHandle == null)
 					{
@@ -538,7 +590,7 @@ _fail:
 					shadowHandle = null;
 				}
 
-				chunkShader.drawer = new BatchDrawer(drawHandle, shadowHandle, task.renderPasses, task.commands, task.uniformsMap, task.shadowUniformsMap, task.uniformsData);
+				chunkShader.drawer = new BatchDrawer(drawHandle, shadowHandle, task.RenderPasses, task.Commands, task.UniformsMap, task.ShadowUniformsMap, task.UniformsData);
 
 				chunkDataHelper.Clear();
 			}
