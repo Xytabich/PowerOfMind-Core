@@ -30,11 +30,11 @@ namespace PowerOfMind.Systems.Graphics.Shader
 		protected Dictionary<string, int> uniformAliasToIndex = null;
 
 		private readonly EnumShaderProgram shaderType;
-		private readonly GraphicsSystem graphics;
+		private readonly IGraphicsSystemInternal graphics;
 		private readonly IReadOnlyDictionary<string, string> attribNameToAlias;
 		private readonly IReadOnlyDictionary<string, string> uniformNameToAlias;
 
-		public StandardShaderProxy(EnumShaderProgram shaderType, GraphicsSystem graphics,
+		public StandardShaderProxy(EnumShaderProgram shaderType, IGraphicsSystemInternal graphics,
 			IReadOnlyDictionary<string, string> attribNameToAlias = null, IReadOnlyDictionary<string, string> uniformNameToAlias = null)
 		{
 			this.shaderType = shaderType;

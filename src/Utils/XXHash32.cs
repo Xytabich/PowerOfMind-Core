@@ -183,8 +183,5 @@ namespace XXHash
 		private static uint rol13(uint x) { return (x << 13) | (x >> (32 - 13)); }
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		private static uint rol17(uint x) { return (x << 17) | (x >> (32 - 17)); }
-
 	}
-
-
 }

@@ -14,19 +14,19 @@ namespace PowerOfMind.Graphics
 {
 	using TextureWrapMode = OpenTK.Graphics.OpenGL.TextureWrapMode;
 
-	public partial class GraphicsSystem : ModSystem
+	public partial class GraphicsSystem : ModSystem, IGraphicsSystemInternal
 	{
-		public ShaderPreprocessor ShaderPreprocessor { get; private set; }
-		public string VertexShaderDefines { get; private set; }
-		public string FragmentShaderDefines { get; private set; }
 		public bool IsGraphicsReady => isLoaded;
 
-		public ILogger Logger => api.Logger;
+		ShaderPreprocessor IGraphicsSystemInternal.ShaderPreprocessor => shaderPreprocessor;
+		string IGraphicsSystemInternal.VertexShaderDefines => vertexShaderDefines;
+		string IGraphicsSystemInternal.FragmentShaderDefines => fragmentShaderDefines;
+		ILogger IGraphicsSystemInternal.Logger => api.Logger;
 
 		public event System.Action OnBeforeShadersReload { add { beforeReloadShaderListeners.Add(value); } remove { beforeReloadShaderListeners.Remove(value); } }
 		public event System.Func<bool> OnAfterShadersReload { add { afterReloadShaderListeners.Add(value); } remove { afterReloadShaderListeners.Remove(value); } }
 
-		internal ICoreClientAPI Api => api;
+		ICoreClientAPI IGraphicsSystemInternal.Api => api;
 
 		private ICoreClientAPI api;
 		private UniformVariableHandlers uniformHandlers;
@@ -38,11 +38,15 @@ namespace PowerOfMind.Graphics
 		private HashSet<IExtendedShaderProgram> shaders = new HashSet<IExtendedShaderProgram>();
 		private Dictionary<string, IExtendedShaderProgram> nameToShader = new Dictionary<string, IExtendedShaderProgram>();
 
+		private ShaderPreprocessor shaderPreprocessor;
+		private string vertexShaderDefines;
+		private string fragmentShaderDefines;
+
 		public override void StartClientSide(ICoreClientAPI api)
 		{
 			this.api = api;
 			uniformHandlers = new UniformVariableHandlers();
-			ShaderPreprocessor = new ShaderPreprocessor(this);
+			shaderPreprocessor = new ShaderPreprocessor(this);
 			api.Event.ReloadShader += ReloadShaders;
 		}
 
@@ -53,6 +57,8 @@ namespace PowerOfMind.Graphics
 
 		public override void Dispose()
 		{
+			SaveShadersCache();
+
 			base.Dispose();
 			foreach(var shader in shaders)
 			{
@@ -132,7 +138,7 @@ namespace PowerOfMind.Graphics
 			return extShader;
 		}
 
-		internal bool TryCompileShaderStage(EnumShaderType type, string code, out int handle, out string error)
+		bool IGraphicsSystemInternal.TryCompileShaderStage(EnumShaderType type, string code, out int handle, out string error)
 		{
 			handle = GL.CreateShader((ShaderType)type);
 			GL.ShaderSource(handle, code);
@@ -150,15 +156,20 @@ namespace PowerOfMind.Graphics
 			return true;
 		}
 
-		internal void DeleteShaderStage(int handle)
+		void IGraphicsSystemInternal.DeleteShaderStage(int handle)
 		{
 			GL.DeleteShader(handle);
 		}
 
-		internal bool TryCreateShaderProgram(Action<int> bindStagesCallback, out int handle, out string error)
+		bool IGraphicsSystemInternal.TryCreateShaderProgram(Action<int> bindStagesCallback, bool willBeCached, out int handle, out string error)
 		{
 			handle = GL.CreateProgram();
 			bindStagesCallback(handle);
+
+			if(willBeCached && HasProgramBinaryArb())
+			{
+				GL.ProgramParameter(handle, ProgramParameterName.ProgramBinaryRetrievableHint, (int)All.True);
+			}
 			GL.LinkProgram(handle);
 			GL.GetProgram(handle, GetProgramParameterName.LinkStatus, out var outval);
 			if(outval != 1)
@@ -173,27 +184,27 @@ namespace PowerOfMind.Graphics
 			return true;
 		}
 
-		internal void DeleteShaderProgram(int handle)
+		void IGraphicsSystemInternal.DeleteShaderProgram(int handle)
 		{
 			GL.DeleteProgram(handle);
 		}
 
-		internal void AttachStageToProgram(int programHandle, int stageHandle)
+		void IGraphicsSystemInternal.AttachStageToProgram(int programHandle, int stageHandle)
 		{
 			GL.AttachShader(programHandle, stageHandle);
 		}
 
-		internal void SetActiveShader(int handle)
+		void IGraphicsSystemInternal.SetActiveShader(int handle)
 		{
 			GL.UseProgram(handle);
 		}
 
-		internal void UnsetActiveShader()
+		void IGraphicsSystemInternal.UnsetActiveShader()
 		{
 			GL.UseProgram(0);
 		}
 
-		internal void BindTexture(EnumTextureTarget target, int textureId, int textureNumber, ITextureSampler sampler, bool clampTexturesToEdge)
+		void IGraphicsSystemInternal.BindTexture(EnumTextureTarget target, int textureId, int textureNumber, ITextureSampler sampler, bool clampTexturesToEdge)
 		{
 			GL.ActiveTexture(TextureUnit.Texture0 + textureNumber);
 			var texTarget = TextureTarget.Texture2D;
@@ -221,7 +232,7 @@ namespace PowerOfMind.Graphics
 			}
 		}
 
-		internal string GetPlatformShaderVersion(string version)
+		string IGraphicsSystemInternal.GetPlatformShaderVersion(string version)
 		{
 			if(RuntimeEnv.OS == OS.Mac)
 			{
@@ -230,7 +241,7 @@ namespace PowerOfMind.Graphics
 			return version;
 		}
 
-		internal void EnsureShaderVersionSupported(string version, string filename)
+		void IGraphicsSystemInternal.EnsureShaderVersionSupported(string version, string filename)
 		{
 			Vintagestory.Client.NoObf.Shader.EnsureVersionSupported(version, filename);
 		}
@@ -244,8 +255,8 @@ namespace PowerOfMind.Graphics
 			dummyShader.FragmentShader = new Vintagestory.Client.NoObf.Shader();
 			api.Shader.RegisterMemoryShaderProgram("powerofmindcore:graphicdummyshader", dummyShader);
 
-			VertexShaderDefines = dummyShader.VertexShader.PrefixCode;
-			FragmentShaderDefines = dummyShader.FragmentShader.PrefixCode;
+			vertexShaderDefines = dummyShader.VertexShader.PrefixCode;
+			fragmentShaderDefines = dummyShader.FragmentShader.PrefixCode;
 
 			for(int i = beforeReloadShaderListeners.Count - 1; i >= 0; i--)
 			{
@@ -268,7 +279,8 @@ namespace PowerOfMind.Graphics
 				allCompiled &= afterReloadShaderListeners[i].Invoke();
 			}
 
-			ShaderPreprocessor.ClearCache();
+			shaderPreprocessor.ClearCache();
+			SaveShadersCache();
 			return allCompiled;
 		}
 

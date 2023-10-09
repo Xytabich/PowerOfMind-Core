@@ -12,7 +12,7 @@ namespace PowerOfMind.Graphics.Shader
 	{
 		private static readonly HashSet<char> invalidPathCharacters = new HashSet<char>(Path.GetInvalidFileNameChars().Union(Path.GetInvalidPathChars()).Distinct());
 
-		private readonly GraphicsSystem graphics;
+		private readonly IGraphicsSystemInternal graphics;
 
 		private StringBuilder sb = null;
 		private HashSet<int> processedSources = null;
@@ -22,7 +22,7 @@ namespace PowerOfMind.Graphics.Shader
 		internal Dictionary<AssetLocation, int> locationToId = null;
 		internal List<KeyValuePair<AssetLocation, string>> sources = null;
 
-		internal ShaderPreprocessor(GraphicsSystem graphics)
+		internal ShaderPreprocessor(IGraphicsSystemInternal graphics)
 		{
 			this.graphics = graphics;
 		}

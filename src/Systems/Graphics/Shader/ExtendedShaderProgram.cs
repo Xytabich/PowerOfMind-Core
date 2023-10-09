@@ -19,18 +19,20 @@ namespace PowerOfMind.Graphics.Shader
 		public ShaderInputDeclaration Inputs { get; private set; }
 		public ShaderUniformDeclaration Uniforms { get; private set; }
 
+		protected virtual bool EnableCaching => false;
+
 		protected Dictionary<string, int> uniformNameToIndex = new Dictionary<string, int>();
 		protected Dictionary<string, int> uniformAliasToIndex = new Dictionary<string, int>();
 		protected Dictionary<int, ITextureSampler> customSamplers = null;
-		protected readonly GraphicsSystem graphics;
+		protected readonly IGraphicsSystemInternal graphics;
 		protected ShaderStage[] stages;
 		protected int handle = 0;
 
 		protected Action[] useBindings = null;
 
-		private Func<IExtendedShaderProgram, Action> createUseBindings = null;
+		private readonly Func<IExtendedShaderProgram, Action> createUseBindings = null;
 
-		public ExtendedShaderProgram(GraphicsSystem graphics, string passName, Func<IExtendedShaderProgram, Action> createUseBindings, params ShaderStage[] stages)
+		public ExtendedShaderProgram(IGraphicsSystemInternal graphics, string passName, Func<IExtendedShaderProgram, Action> createUseBindings, params ShaderStage[] stages)
 		{
 			this.graphics = graphics;
 			this.PassName = passName;
@@ -52,7 +54,7 @@ namespace PowerOfMind.Graphics.Shader
 			}
 		}
 
-		protected ExtendedShaderProgram(GraphicsSystem graphics, string passName)
+		protected ExtendedShaderProgram(IGraphicsSystemInternal graphics, string passName)
 		{
 			this.graphics = graphics;
 			this.PassName = passName;
@@ -88,13 +90,12 @@ namespace PowerOfMind.Graphics.Shader
 				}
 				return false;
 			}
-
 			if(!graphics.TryCreateShaderProgram(p => {
 				foreach(var stage in stages)
 				{
 					stage.Attach(p);
 				}
-			}, out handle, out var error))
+			}, EnableCaching, out handle, out var error))
 			{
 				foreach(var stage in stages)
 				{
@@ -119,7 +120,44 @@ namespace PowerOfMind.Graphics.Shader
 				useBindings = new Action[] { createUseBindings(this) };
 			}
 
-			graphics.Logger.Notification("Loaded shader programm for render pass {0}.", PassName);
+			graphics.Logger.Notification("Loaded shader program for render pass {0}.", PassName);
+
+			InitInputDeclaration();
+			InitUniformDeclaration();
+
+			if(customSamplers != null)
+			{
+				foreach(var pair in customSamplers)
+				{
+					pair.Value.Allocate();
+				}
+			}
+
+			return true;
+		}
+
+		protected bool LoadCached<TEnumerable>(Vintagestory.API.Common.AssetLocation shaderKey, TEnumerable stagesHash)
+			where TEnumerable : IEnumerable<ShaderHashInfo>
+		{
+			if(handle != 0) return true;
+			if(!graphics.TryLoadCachedShaderProgram(shaderKey, stagesHash, out handle, out _))
+			{
+				handle = 0;
+				return false;
+			}
+
+			foreach(var stage in stages)//All stages are included in the program, there is no need to store them anymore
+			{
+				stage.Dispose();
+			}
+
+			useBindings = null;
+			if(createUseBindings != null)
+			{
+				useBindings = new Action[] { createUseBindings(this) };
+			}
+
+			graphics.Logger.Notification("Loaded cached shader program '{0}' for render pass {1}.", shaderKey, PassName);
 
 			InitInputDeclaration();
 			InitUniformDeclaration();

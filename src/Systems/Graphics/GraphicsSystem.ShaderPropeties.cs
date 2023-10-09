@@ -8,7 +8,7 @@ namespace PowerOfMind.Graphics
 {
 	public partial class GraphicsSystem
 	{
-		internal ShaderVertexAttribute[] GetShaderAttributes(int handle, IReadOnlyDictionary<string, string> aliasByName = null)
+		ShaderVertexAttribute[] IGraphicsSystemInternal.GetShaderAttributes(int handle, IReadOnlyDictionary<string, string> aliasByName = null)
 		{
 			GL.GetProgram(handle, GetProgramParameterName.ActiveAttributes, out int count);
 			GL.GetProgram(handle, GetProgramParameterName.ActiveAttributeMaxLength, out int maxNameLen);
@@ -85,7 +85,7 @@ namespace PowerOfMind.Graphics
 			return attributes;
 		}
 
-		internal UniformPropertyHandle[] GetShaderUniforms(int handle, IReadOnlyDictionary<string, string> aliasByName = null, bool initTextureSlots = true)
+		UniformPropertyHandle[] IGraphicsSystemInternal.GetShaderUniforms(int handle, IReadOnlyDictionary<string, string> aliasByName = null, bool initTextureSlots = true)
 		{
 			GL.GetProgram(handle, GetProgramParameterName.ActiveUniforms, out int count);
 			GL.GetProgram(handle, GetProgramParameterName.ActiveUniformMaxLength, out int maxNameLen);

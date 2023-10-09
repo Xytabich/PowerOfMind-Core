@@ -7,10 +7,14 @@ namespace PowerOfMind.Graphics.Shader
 {
 	public class ShaderStage : IShader, IDisposable
 	{
-		public readonly EnumShaderType Type;
+		public EnumShaderType Type { get; }
 
-		EnumShaderType IShader.Type => Type;
-		string IShader.Code { get { return code; } set { throw new InvalidOperationException(); } }
+		/// <summary>
+		/// The shader source code.
+		/// Cannot be assigned via setter.
+		/// </summary>
+		public string Code { get { return code; } set { throw new InvalidOperationException(); } }
+
 		string IShader.PrefixCode { get { throw new NotImplementedException(); } set { throw new NotImplementedException(); } }
 
 		private readonly string filename;
@@ -20,9 +24,10 @@ namespace PowerOfMind.Graphics.Shader
 		private readonly KeyValuePair<string, string>[] uniformsAlias;
 
 		private int handle = 0;
-		private GraphicsSystem graphics;
+		private IGraphicsSystemInternal graphics;
 
-		public ShaderStage(EnumShaderType type, string filename, string code, string version, KeyValuePair<string, string>[] inputsAlias, KeyValuePair<string, string>[] uniformsAlias)
+		public ShaderStage(EnumShaderType type, string filename, string code, string version,
+			KeyValuePair<string, string>[] inputsAlias, KeyValuePair<string, string>[] uniformsAlias)
 		{
 			Type = type;
 			this.filename = filename;
@@ -32,7 +37,7 @@ namespace PowerOfMind.Graphics.Shader
 			this.uniformsAlias = uniformsAlias;
 		}
 
-		public bool Compile(GraphicsSystem graphics, ILogger logger)
+		public bool Compile(IGraphicsSystemInternal graphics, ILogger logger)
 		{
 			if(!graphics.TryCompileShaderStage(Type, code, out handle, out var error))
 			{
@@ -51,7 +56,7 @@ namespace PowerOfMind.Graphics.Shader
 			graphics.AttachStageToProgram(programHandle, handle);
 		}
 
-		public bool EnsureVersionSupported(GraphicsSystem graphics, ILogger logger)
+		public bool EnsureVersionSupported(IGraphicsSystemInternal graphics, ILogger logger)
 		{
 			try
 			{

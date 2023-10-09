@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
+using XXHash;
 
 namespace PowerOfMind.Graphics.Shader
 {
@@ -18,18 +19,18 @@ namespace PowerOfMind.Graphics.Shader
 			new KeyValuePair<EnumShaderType, string>(EnumShaderType.GeometryShader, ".gsh")
 		};
 
+		protected override bool EnableCaching => true;
+
 		private readonly AssetLocation location;
 		private readonly System.Func<EnumShaderType, string> shaderDefinitionsProvider;
-		private readonly System.Func<IExtendedShaderProgram, Action> createUseBindings;
 
-		public AssetShaderProgram(GraphicsSystem graphics, string passName, AssetLocation location,
+		public AssetShaderProgram(IGraphicsSystemInternal graphics, string passName, AssetLocation location,
 			System.Func<EnumShaderType, string> shaderDefinitionsProvider,
 			System.Func<IExtendedShaderProgram, Action> createUseBindings)
-			: base(graphics, passName, null)
+			: base(graphics, passName, createUseBindings)
 		{
 			this.location = location;
 			this.shaderDefinitionsProvider = shaderDefinitionsProvider;
-			this.createUseBindings = createUseBindings;
 		}
 
 		public override bool Compile()
@@ -69,35 +70,43 @@ namespace PowerOfMind.Graphics.Shader
 					}
 					catch(Exception e)
 					{
-						graphics.Logger.Error("Exception while trying to preprocess shader asset '{0}': {1}", assetLoc.ToString(), e);
+						graphics.Logger.Error("Exception while trying to preprocess shader asset '{0}': {1}", assetLoc, e);
 						break;
 					}
 				}
 			}
+
 			this.stages = stages.ToArray();
-			if(base.Compile())
+			if(!graphics.HasCachedShaderProgram(location) || !LoadCached(location,
+				stages.Select(s => new ShaderHashInfo(s.Type, XXHash64.Hash(s.Code), s.Code.Length))))
 			{
-				List<Action> bindings = null;
-				if(includes != null)
+				if(!base.Compile())
 				{
-					foreach(var pair in StandardIncludeBindings.ShaderBindingFactoryPairs)
+					return false;
+				}
+				graphics.SaveShaderProgramToCache(location, handle, stages.Select(s => new ShaderHashInfo(s.Type, XXHash64.Hash(s.Code), s.Code.Length)));
+				graphics.Logger.Notification("Cached shader program '{0}' for render pass {1}.", location, PassName);
+			}
+
+			List<Action> bindings = null;
+			if(includes != null)
+			{
+				foreach(var pair in StandardIncludeBindings.ShaderBindingFactoryPairs)
+				{
+					if(includes.Contains(pair.Key))
 					{
-						if(includes.Contains(pair.Key))
-						{
-							if(bindings == null) bindings = new List<Action>();
-							bindings.Add(pair.Value(this));
-						}
+						if(bindings == null) bindings = new List<Action>();
+						bindings.Add(pair.Value(this));
 					}
 				}
-				if(useBindings != null)
-				{
-					if(bindings == null) bindings = new List<Action>();
-					bindings.AddRange(useBindings);
-				}
-				useBindings = bindings?.ToArray();
-				return true;
 			}
-			return false;
+			if(useBindings != null)
+			{
+				if(bindings == null) bindings = new List<Action>();
+				bindings.AddRange(useBindings);
+			}
+			useBindings = bindings?.ToArray();
+			return true;
 		}
 	}
 }
