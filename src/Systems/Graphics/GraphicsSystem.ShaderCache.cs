@@ -14,7 +14,10 @@ namespace PowerOfMind.Graphics
 	{
 		private const byte SHADER_CACHE_VERSION = 1;
 
-		private Dictionary<AssetLocation, string> cachedShaders = null;
+		private Dictionary<AssetLocation, int> cachedShaders = null;
+		private Stack<int> freeEntries = null;
+		private int entriesCounter = 0;
+
 		private bool shaderCacheDirty = false;
 		private HashSet<ShaderHashInfo> tmpShaderHashSet = null;
 
@@ -33,7 +36,11 @@ namespace PowerOfMind.Graphics
 						Directory.CreateDirectory(path);
 					}
 					path = Path.Combine(path, "entries.json");
-					File.WriteAllText(path, JsonConvert.SerializeObject(cachedShaders));
+					File.WriteAllText(path, JsonConvert.SerializeObject(new CacheEntries() {
+						cache = cachedShaders,
+						free = freeEntries,
+						counter = entriesCounter
+					}));
 				}
 				catch { }
 			}
@@ -58,12 +65,12 @@ namespace PowerOfMind.Graphics
 
 			handle = 0;
 			error = null;
-			if(cachedShaders.TryGetValue(shaderKey, out var fileName))
+			if(cachedShaders.TryGetValue(shaderKey, out var id))
 			{
 				string path = null;
 				try
 				{
-					path = Path.Combine(GamePaths.Cache, "pomshadercache", fileName.Substring(0, 2), fileName);
+					path = Path.Combine(GamePaths.Cache, "pomshadercache", (id & 255).ToString("x2"), id.ToString("x8"));
 
 					if(File.Exists(path))
 					{
@@ -82,10 +89,9 @@ namespace PowerOfMind.Graphics
 									var buffSpan = new Span<byte>(&tmpLong, sizeof(ulong));
 									for(int i = 0; i < stageCount; i++)
 									{
-										var type = EnumShaderType.FragmentShader + stream.ReadByte();
-
-										stream.Read(buffSpan.Slice(0, sizeof(int)));
-										int size = *(int*)&tmpLong;
+										stream.Read(buffSpan);
+										int size = ((int*)&tmpLong)[0];
+										var type = (EnumShaderType)((int*)&tmpLong)[1];
 
 										stream.Read(buffSpan);
 										tmpShaderHashSet.Add(new ShaderHashInfo(type, tmpLong, size));
@@ -141,6 +147,8 @@ namespace PowerOfMind.Graphics
 					}
 				}
 				catch { }
+
+				freeEntries.Push(id);
 				cachedShaders.Remove(shaderKey);
 			}
 
@@ -162,10 +170,17 @@ namespace PowerOfMind.Graphics
 			if(GL.GetError() != ErrorCode.NoError || size == 0) return;
 
 			if(cachedShaders == null) LoadShadersCache();
-			if(!cachedShaders.TryGetValue(shaderKey, out var fileName))
+			if(!cachedShaders.TryGetValue(shaderKey, out var id))
 			{
-				fileName = Guid.NewGuid().ToString("N");
-				cachedShaders[shaderKey] = fileName;
+				if(freeEntries.Count > 0)
+				{
+					id = freeEntries.Pop();
+				}
+				else
+				{
+					id = entriesCounter++;
+				}
+				cachedShaders[shaderKey] = id;
 			}
 
 			try
@@ -178,9 +193,9 @@ namespace PowerOfMind.Graphics
 					return;
 				}
 
-				var path = Path.Combine(GamePaths.Cache, "pomshadercache", fileName.Substring(0, 2));
+				var path = Path.Combine(GamePaths.Cache, "pomshadercache", (id & 255).ToString("x2"));
 				if(!Directory.Exists(path)) Directory.CreateDirectory(path);
-				path = Path.Combine(path, fileName);
+				path = Path.Combine(path, id.ToString("x8"));
 				using(var stream = File.OpenWrite(path))
 				{
 					stream.SetLength(0);
@@ -192,10 +207,9 @@ namespace PowerOfMind.Graphics
 					stream.WriteByte((byte)tmpShaderHashSet.Count);
 					foreach(var info in tmpShaderHashSet)
 					{
-						stream.WriteByte((byte)(info.Type - EnumShaderType.FragmentShader));
-
-						*(int*)&tmpLong = info.Size;
-						stream.Write(buffSpan.Slice(0, sizeof(int)));
+						((int*)&tmpLong)[0] = info.Size;
+						((int*)&tmpLong)[1] = (int)info.Type;
+						stream.Write(buffSpan);
 
 						tmpLong = info.Hash;
 						stream.Write(buffSpan);
@@ -231,11 +245,24 @@ namespace PowerOfMind.Graphics
 			{
 				try
 				{
-					cachedShaders = JsonConvert.DeserializeObject<Dictionary<AssetLocation, string>>(File.ReadAllText(path));
+					var entries = JsonConvert.DeserializeObject<CacheEntries>(File.ReadAllText(path));
+					cachedShaders = entries.cache;
+					freeEntries = entries.free;
+					entriesCounter = entries.counter;
+					return;
 				}
 				catch { }
 			}
-			if(cachedShaders == null) cachedShaders = new Dictionary<AssetLocation, string>();
+			cachedShaders = new Dictionary<AssetLocation, int>();
+			freeEntries = new Stack<int>();
+			entriesCounter = 0;
+		}
+
+		private class CacheEntries
+		{
+			public Dictionary<AssetLocation, int> cache;
+			public Stack<int> free;
+			public int counter;
 		}
 	}
 }
