@@ -1,4 +1,5 @@
-﻿using System;
+﻿using PowerOfMind.ShaderCache;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -77,15 +78,17 @@ namespace PowerOfMind.Graphics.Shader
 			}
 
 			this.stages = stages.ToArray();
-			if(!graphics.HasCachedShaderProgram(location) || !LoadCached(location,
+			if(!graphics.ShaderCache.HasCachedShaderProgram(location) || !LoadCached(location,
 				stages.Select(s => new ShaderHashInfo(s.Type, XXHash64.Hash(s.Code), s.Code.Length))))
 			{
 				if(!base.Compile())
 				{
 					return false;
 				}
-				graphics.SaveShaderProgramToCache(location, handle, stages.Select(s => new ShaderHashInfo(s.Type, XXHash64.Hash(s.Code), s.Code.Length)));
-				graphics.Logger.Notification("Cached shader program '{0}' for render pass {1}.", location, PassName);
+				if(graphics.ShaderCache.SaveShaderProgramToCache(location, handle, stages.Select(s => new ShaderHashInfo(s.Type, XXHash64.Hash(s.Code), s.Code.Length))))
+				{
+					graphics.Logger.Notification("Cached shader program '{0}' for render pass {1}.", location, PassName);
+				}
 			}
 
 			List<Action> bindings = null;

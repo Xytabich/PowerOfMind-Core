@@ -1,4 +1,5 @@
-﻿using PowerOfMind.Systems.Graphics;
+﻿using PowerOfMind.ShaderCache;
+using PowerOfMind.Systems.Graphics;
 using System;
 using System.Collections.Generic;
 using Vintagestory.API.Client;
@@ -140,7 +141,7 @@ namespace PowerOfMind.Graphics.Shader
 			where TEnumerable : IEnumerable<ShaderHashInfo>
 		{
 			if(handle != 0) return true;
-			if(!graphics.TryLoadCachedShaderProgram(shaderKey, stagesHash, out handle, out _))
+			if(!graphics.ShaderCache.TryLoadCachedShaderProgram(shaderKey, stagesHash, out handle, out _))
 			{
 				handle = 0;
 				return false;

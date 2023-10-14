@@ -1,4 +1,5 @@
 ﻿using PowerOfMind.Graphics.Shader;
+using PowerOfMind.ShaderCache;
 using PowerOfMind.Systems.Graphics;
 using System;
 using System.Collections.Generic;
@@ -15,6 +16,7 @@ namespace PowerOfMind.Graphics
 		ICoreClientAPI Api { get; }
 		ILogger Logger { get; }
 		ShaderPreprocessor ShaderPreprocessor { get; }
+		ShaderCacheSystem ShaderCache { get; }
 		string VertexShaderDefines { get; }
 		string FragmentShaderDefines { get; }
 
@@ -40,24 +42,6 @@ namespace PowerOfMind.Graphics
 		void SetActiveShader(int handle);
 
 		void UnsetActiveShader();
-
-		bool HasCachedShaderProgram(AssetLocation shaderKey);
-
-		/// <summary>
-		/// Loads the cached program created via <see cref="SaveShaderProgramToCache"/> if the shader properties match
-		/// </summary>
-		/// <returns><see langword="true"/> if successful</returns>
-		bool TryLoadCachedShaderProgram<TEnumerable>(AssetLocation shaderKey, TEnumerable stagesHash, out int handle, out string error)
-			where TEnumerable : IEnumerable<ShaderHashInfo>;
-
-		/// <summary>
-		/// The enableCaching parameter in <see cref="TryCreateShaderProgram"/> must be set to <see langword="true"/> for shader caching.
-		/// </summary>
-		/// <param name="shaderKey">Unique shader key, such as asset path</param>
-		/// <param name="handle">Shader program handle</param>
-		/// <param name="stagesHash">Code hash and its size for each stage</param>
-		void SaveShaderProgramToCache<TEnumerable>(AssetLocation shaderKey, int handle, TEnumerable stagesHash)
-			where TEnumerable : IEnumerable<ShaderHashInfo>;
 
 		/// <summary>
 		/// Returns a list of shader vertex attributes

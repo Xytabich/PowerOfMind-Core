@@ -1,5 +1,6 @@
 ﻿using OpenTK.Graphics.OpenGL;
 using PowerOfMind.Graphics.Shader;
+using PowerOfMind.ShaderCache;
 using PowerOfMind.Systems.Graphics;
 using PowerOfMind.Systems.Graphics.Shader;
 using System;
@@ -18,15 +19,18 @@ namespace PowerOfMind.Graphics
 	{
 		public bool IsGraphicsReady => isLoaded;
 
+		public event System.Action OnBeforeShadersReload { add { beforeReloadShaderListeners.Add(value); } remove { beforeReloadShaderListeners.Remove(value); } }
+		public event System.Func<bool> OnAfterShadersReload { add { afterReloadShaderListeners.Add(value); } remove { afterReloadShaderListeners.Remove(value); } }
+
 		ShaderPreprocessor IGraphicsSystemInternal.ShaderPreprocessor => shaderPreprocessor;
 		string IGraphicsSystemInternal.VertexShaderDefines => vertexShaderDefines;
 		string IGraphicsSystemInternal.FragmentShaderDefines => fragmentShaderDefines;
 		ILogger IGraphicsSystemInternal.Logger => api.Logger;
-
-		public event System.Action OnBeforeShadersReload { add { beforeReloadShaderListeners.Add(value); } remove { beforeReloadShaderListeners.Remove(value); } }
-		public event System.Func<bool> OnAfterShadersReload { add { afterReloadShaderListeners.Add(value); } remove { afterReloadShaderListeners.Remove(value); } }
+		ShaderCacheSystem IGraphicsSystemInternal.ShaderCache => shaderCache;
 
 		ICoreClientAPI IGraphicsSystemInternal.Api => api;
+
+		private ShaderCacheSystem shaderCache;
 
 		private ICoreClientAPI api;
 		private UniformVariableHandlers uniformHandlers;
@@ -45,6 +49,7 @@ namespace PowerOfMind.Graphics
 		public override void StartClientSide(ICoreClientAPI api)
 		{
 			this.api = api;
+			shaderCache = api.ModLoader.GetModSystem<ShaderCacheSystem>();
 			uniformHandlers = new UniformVariableHandlers();
 			shaderPreprocessor = new ShaderPreprocessor(this);
 			api.Event.ReloadShader += ReloadShaders;
@@ -57,8 +62,6 @@ namespace PowerOfMind.Graphics
 
 		public override void Dispose()
 		{
-			SaveShadersCache();
-
 			base.Dispose();
 			foreach(var shader in shaders)
 			{
@@ -161,12 +164,12 @@ namespace PowerOfMind.Graphics
 			GL.DeleteShader(handle);
 		}
 
-		bool IGraphicsSystemInternal.TryCreateShaderProgram(Action<int> bindStagesCallback, bool willBeCached, out int handle, out string error)
+		bool IGraphicsSystemInternal.TryCreateShaderProgram(Action<int> bindStagesCallback, bool enableCaching, out int handle, out string error)
 		{
 			handle = GL.CreateProgram();
 			bindStagesCallback(handle);
 
-			if(willBeCached && HasProgramBinaryArb())
+			if(enableCaching && shaderCache.HasProgramBinaryArb())
 			{
 				GL.ProgramParameter(handle, ProgramParameterName.ProgramBinaryRetrievableHint, (int)All.True);
 			}
@@ -280,7 +283,7 @@ namespace PowerOfMind.Graphics
 			}
 
 			shaderPreprocessor.ClearCache();
-			SaveShadersCache();
+			shaderCache.SaveShadersCache();
 			return allCompiled;
 		}
 
