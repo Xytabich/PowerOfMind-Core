@@ -1,5 +1,5 @@
 ﻿using PowerOfMind.Systems.RenderBatching;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 
 namespace PowerOfMind.Systems.ChunkBatchers
 {

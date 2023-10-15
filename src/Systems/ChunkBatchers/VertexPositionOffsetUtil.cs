@@ -1,7 +1,7 @@
 ﻿using PowerOfMind.Graphics;
 using PowerOfMind.Graphics.Drawable;
 using System;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 using Vintagestory.API.Client;
 
 namespace PowerOfMind.Systems.ChunkBatchers

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 
 namespace PowerOfMind.Systems.ChunkBatchers
 {

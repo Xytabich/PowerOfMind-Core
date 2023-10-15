@@ -36,8 +36,11 @@
 		<Reference Include="protobuf-net">
 			<HintPath>C:\Games\Vintagestory18.NET7\Lib\protobuf-net.dll</HintPath>
 		</Reference>
+		<Reference Include="GenMathematics">
+			<HintPath>.\GenMathematics.dll</HintPath>
+		</Reference>
 		<Reference Include="Unity.Mathematics">
-			<HintPath>.\Unity.Mathematics.dll</HintPath>
+		  <HintPath>..\..\..\VSMods18\mods\powerofmindcore\Unity.Mathematics.dll</HintPath>
 		</Reference>
 		<Reference Include="VintagestoryAPI">
 			<HintPath>C:\Games\Vintagestory18.NET7\VintagestoryAPI.dll</HintPath>

@@ -5,7 +5,7 @@ using PowerOfMind.Systems.RenderBatching;
 using PowerOfMind.Utils;
 using System;
 using System.Collections.Generic;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 

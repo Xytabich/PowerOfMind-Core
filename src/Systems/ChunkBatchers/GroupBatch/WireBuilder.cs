@@ -1,9 +1,11 @@
 ﻿using PowerOfMind.Systems.RenderBatching;
 using System;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
+using GenMathematics;
+using GenMathematics.Matrices;
 
 namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 {
@@ -54,14 +56,14 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 			tMin = Math.Max(0, tMin);
 			tMax = Math.Min(1, tMax);
 
-			var rotation = quaternion.LookRotationSafe(rayDir, new float3(0, 1, 0));
-
-			float rayLen = math.length(rayDir);
+			float rayLen = GenMath.LengthRef(rayDir);
 			float overallLen = tMin * rayLen;
 			float lenLeft = (tMax - tMin) * rayLen;
 			rayPos += rayDir * tMin;
 			rayDir /= rayLen;
-			float maxYOffset = (1f - Math.Abs(math.dot(rayDir, new float3(0, 1, 0)))) * Math.Min(rayLen * 0.05f, 0.5f);
+			float maxYOffset = (1f - Math.Abs(GenMath.Dot(rayDir, float3.UnitY))) * Math.Min(rayLen * 0.05f, 0.5f);
+
+			var rotation = QuaternionMath.FromDirectionSafe(rayDir, float3.UnitY);
 
 			float segmentWidth = SegmentWidth;
 			float segmentLength = SegmentLength;
@@ -85,7 +87,7 @@ namespace PowerOfMind.Systems.ChunkBatchers.GroupBatch
 					tmpCoords.xy *= segmentWidth;
 					tmpCoords.z *= partLen;
 					float yOffset = CalcYOffset(overallLen + tmpCoords.z, rayLen, maxYOffset);
-					tmpCoords = rayPos + math.rotate(rotation, tmpCoords);
+					tmpCoords = rayPos + QuaternionMath.Transform(rotation, tmpCoords);
 					tmpCoords.y += yOffset;
 					var uv = segmentUvs[i];
 					uv.y *= segmentWidth;

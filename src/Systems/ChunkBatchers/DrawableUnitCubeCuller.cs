@@ -3,9 +3,10 @@ using PowerOfMind.Graphics.Drawable;
 using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 using Vintagestory.API.Client;
 using Vintagestory.API.MathTools;
+using GenMathematics;
 
 namespace PowerOfMind.Systems.ChunkBatchers
 {
@@ -336,14 +337,14 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				util.a = *(float3*)(vertices + a * stride);
 				util.b = *(float3*)(vertices + b * stride);
 				util.c = *(float3*)(vertices + c * stride);
-				plane = new float4(math.cross(util.b - util.a, util.c - util.a), 0);
+				plane = new float4(GenMath.Cross(util.b - util.a, util.c - util.a), 0);
 
 				if(!cullBackfaces || CubeBoundsHelper.TriInView(plane.xyz, visibleSides))
 				{
-					plane.xyz = math.normalize(plane.xyz);
-					plane.w = -math.dot(util.a, plane.xyz);
+					plane.xyz = GenMath.Normalize(plane.xyz);
+					plane.w = -GenMath.Dot(util.a, plane.xyz);
 
-					p = CubeBoundsHelper.cubeCenter - plane.xyz * (math.dot(plane.xyz, CubeBoundsHelper.cubeCenter) + plane.w);
+					p = CubeBoundsHelper.cubeCenter - plane.xyz * (GenMath.Dot(plane.xyz, CubeBoundsHelper.cubeCenter) + plane.w);
 
 					if(CubeBoundsHelper.PointInView(p, visibleSides))
 					{
@@ -376,8 +377,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 				ac = c - a;
 				ap = p - a;
 
-				d1 = math.dot(ab, ap);
-				d2 = math.dot(ac, ap);
+				d1 = GenMath.Dot(ab, ap);
+				d2 = GenMath.Dot(ac, ap);
 				if(d1 <= 0.0f && d2 <= 0.0f)
 				{
 					p = a; //Barycentric coordinates (1,0,0)
@@ -386,8 +387,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 				//Check if P in vertex region outside B
 				float3 bp = p - b;
-				d3 = math.dot(ab, bp);
-				d4 = math.dot(ac, bp);
+				d3 = GenMath.Dot(ab, bp);
+				d4 = GenMath.Dot(ac, bp);
 				if(d3 >= 0.0f && d4 <= d3)
 				{
 					p = b; //Barycentric coordinates (1,0,0)
@@ -405,8 +406,8 @@ namespace PowerOfMind.Systems.ChunkBatchers
 
 				//Check if P in vertex region outside C
 				cp = p - c;
-				d5 = math.dot(ab, cp);
-				d6 = math.dot(ac, cp);
+				d5 = GenMath.Dot(ab, cp);
+				d6 = GenMath.Dot(ac, cp);
 				if(d6 >= 0.0f && d5 <= d6)
 				{
 					p = c; //Barycentric coordinates (1,0,0)
@@ -479,15 +480,15 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			public static bool PointInView(float3 v, int sidesMask)
 			{
 				if(v.x > EPSILON_MIN & v.x < EPSILON_MAX & v.y > EPSILON_MIN & v.y < EPSILON_MAX & v.z > EPSILON_MIN & v.z < EPSILON_MAX) return true;
-				v = math.normalizesafe(v - cubeCenter);
+				v = GenMath.NormalizeSafe(v - cubeCenter, float3.Zero);
 				fixed(float* sideNormals = CubeBoundsHelper.sideNormals.values)
 				{
-					if((sidesMask & FLAG_NORTH) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexNORTH]) > CONE_MAX) return true;
-					if((sidesMask & FLAG_EAST) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexEAST]) > CONE_MAX) return true;
-					if((sidesMask & FLAG_SOUTH) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexSOUTH]) > CONE_MAX) return true;
-					if((sidesMask & FLAG_WEST) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexWEST]) > CONE_MAX) return true;
-					if((sidesMask & FLAG_UP) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexUP]) > CONE_MAX) return true;
-					if((sidesMask & FLAG_DOWN) != 0 && math.dot(v, ((float3*)sideNormals)[BlockFacing.indexDOWN]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_NORTH) != 0 && GenMath.Dot(v, ((float3*)sideNormals)[BlockFacing.indexNORTH]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_EAST) != 0 && GenMath.Dot(v, ((float3*)sideNormals)[BlockFacing.indexEAST]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_SOUTH) != 0 && GenMath.Dot(v, ((float3*)sideNormals)[BlockFacing.indexSOUTH]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_WEST) != 0 && GenMath.Dot(v, ((float3*)sideNormals)[BlockFacing.indexWEST]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_UP) != 0 && GenMath.Dot(v, ((float3*)sideNormals)[BlockFacing.indexUP]) > CONE_MAX) return true;
+					if((sidesMask & FLAG_DOWN) != 0 && GenMath.Dot(v, ((float3*)sideNormals)[BlockFacing.indexDOWN]) > CONE_MAX) return true;
 				}
 				return false;
 			}
@@ -496,12 +497,12 @@ namespace PowerOfMind.Systems.ChunkBatchers
 			{
 				fixed(float* sideNormals = CubeBoundsHelper.sideNormals.values)
 				{
-					if((sidesMask & FLAG_NORTH) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexNORTH]) > math.EPSILON) return true;
-					if((sidesMask & FLAG_EAST) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexEAST]) > math.EPSILON) return true;
-					if((sidesMask & FLAG_SOUTH) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexSOUTH]) > math.EPSILON) return true;
-					if((sidesMask & FLAG_WEST) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexWEST]) > math.EPSILON) return true;
-					if((sidesMask & FLAG_UP) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexUP]) > math.EPSILON) return true;
-					if((sidesMask & FLAG_DOWN) != 0 && math.dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexDOWN]) > math.EPSILON) return true;
+					if((sidesMask & FLAG_NORTH) != 0 && GenMath.Dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexNORTH]) > GenMath.FloatEpsilon) return true;
+					if((sidesMask & FLAG_EAST) != 0 && GenMath.Dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexEAST]) > GenMath.FloatEpsilon) return true;
+					if((sidesMask & FLAG_SOUTH) != 0 && GenMath.Dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexSOUTH]) > GenMath.FloatEpsilon) return true;
+					if((sidesMask & FLAG_WEST) != 0 && GenMath.Dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexWEST]) > GenMath.FloatEpsilon) return true;
+					if((sidesMask & FLAG_UP) != 0 && GenMath.Dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexUP]) > GenMath.FloatEpsilon) return true;
+					if((sidesMask & FLAG_DOWN) != 0 && GenMath.Dot(triNormal, ((float3*)sideNormals)[BlockFacing.indexDOWN]) > GenMath.FloatEpsilon) return true;
 				}
 				return false;
 			}

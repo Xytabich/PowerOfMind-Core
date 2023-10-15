@@ -7,12 +7,13 @@ using PowerOfMind.Systems.RenderBatching.Draw;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using Unity.Mathematics;
+using GenMathematics.Vectors;
 using Vintagestory.API.Client;
 using Vintagestory.API.Common;
 using Vintagestory.API.MathTools;
 using Vintagestory.Client;
 using Vintagestory.Client.NoObf;
+using PowerOfMind.Utils;
 
 namespace PowerOfMind.Systems.RenderBatching
 {
@@ -337,7 +338,7 @@ _fail:
 									{
 										if(shader.modelMatrix >= 0)
 										{
-											renderInfo.ShaderUniforms[shader.modelMatrix].SetValue(float4x4.identity);
+											renderInfo.ShaderUniforms[shader.modelMatrix].SetValue(MathUtils.Identity4x4());
 										}
 
 										SetUniformDefault(ref renderInfo, shader.originPos,
@@ -347,7 +348,7 @@ _fail:
 									else
 									{
 										SetUniformDefault(ref renderInfo, shader.modelMatrix,
-											float4x4.Translate(new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z))),
+											MathUtils.Translation4x4(new float3((float)(origin.x - playerCamPos.X), (float)(origin.y - playerCamPos.Y), (float)(origin.z - playerCamPos.Z))),
 											ref dataOffset);
 									}
 
